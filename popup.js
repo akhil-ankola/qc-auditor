@@ -230,6 +230,28 @@ const MAX_HISTORY = 10;
     .ov-empty-icon { font-size: 24px; }
     .ov-empty-text { font-size: 12px; font-weight: 700; color: var(--t1); }
     .ov-empty-sub  { font-size: 11px; color: var(--t4); }
+
+    /* ── Load More button ─────────────────────────────────────── */
+    .ov-load-more-btn {
+      display: flex; align-items: center; justify-content: center;
+      width: 100%; padding: 10px 16px;
+      background: var(--bg); border: none;
+      border-top: 1px solid var(--border);
+      font-family: inherit; font-size: 11px; font-weight: 700;
+      color: var(--blue); cursor: pointer;
+      transition: background .15s, color .15s;
+      gap: 6px;
+    }
+    .ov-load-more-btn::before {
+      content: '';
+      display: inline-block; width: 14px; height: 14px;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%231A73E8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-size: contain;
+    }
+    :root.dark .ov-load-more-btn::before {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%238AB4F8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    }
+    .ov-load-more-btn:hover { background: var(--blue-lt); }
   `;
   document.head.appendChild(s);
 })();
@@ -814,14 +836,19 @@ function renderOvHeaders(OV) {
     <div class="ov-h-counts">${cc('H1',OV.h1Count)}${cc('H2',OV.h2Count)}${cc('H3',OV.h3Count)}${cc('H4',OV.h4Count)}${cc('H5',OV.h5Count)}${cc('H6',OV.h6Count)}</div>`;
 }
 
-// ── Images (with Broken section) ──────────────────────────────────────────────
+// ── Images (with Broken section + Load More) ──────────────────────────────────
+const IMG_PAGE = 15;   // items per "Load More" batch
+let _imgSections = {}; // { broken: [], toFix: [], completed: [] }
+
 function renderOvImages(OV) {
   const el   = document.getElementById('ovImagesContent');
   const imgs = OV.imagesList || [];
-  const broken    = imgs.filter(i => i.broken);
-  const toFix     = imgs.filter(i => !i.broken && !i.complete);
-  const completed = imgs.filter(i => !i.broken && i.complete);
-  const MAX = 30;
+
+  _imgSections = {
+    broken:    imgs.filter(i => i.broken),
+    toFix:     imgs.filter(i => !i.broken && !i.complete),
+    completed: imgs.filter(i => !i.broken && i.complete)
+  };
 
   const attrVal = (val, present) => {
     if (!present && val === null) return `<span class="ov-img-attr-val miss">/ (missing)</span>`;
@@ -829,10 +856,12 @@ function renderOvImages(OV) {
     return `<span class="ov-img-attr-val ok">${esc((val||'').slice(0,60))}</span>`;
   };
 
-  const imgCard = (img) => `
+  window._imgCardHTML = (img) => `
     <div class="ov-img-card ${img.broken?'is-broken':''}">
       <div class="ov-img-thumb ${img.broken?'broken-thumb':''}">
-        ${img.broken ? '💔' : img.src ? `<img src="${esc(img.src)}" alt="" onerror="this.style.display='none';this.parentNode.textContent='🖼️'">` : '🖼️'}
+        ${img.broken
+          ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>'
+          : img.src ? `<img src="${esc(img.src)}" alt="" onerror="this.style.display='none';this.parentNode.innerHTML='🖼️'">` : '🖼️'}
       </div>
       <div class="ov-img-info">
         ${img.broken ? '<span class="ov-img-broken-badge">⚠ 404 / Broken</span>' : ''}
@@ -844,34 +873,81 @@ function renderOvImages(OV) {
       </div>
     </div>`;
 
+  // Build section HTML with initial batch + Load More btn
+  const sectionHTML = (key, labelHTML, labelClass, list) => {
+    if (!list.length) return '';
+    const initial = list.slice(0, IMG_PAGE);
+    const hasMore = list.length > IMG_PAGE;
+    return `
+      <div class="ov-img-section ${labelClass}">${labelHTML} (${list.length})</div>
+      <div class="ov-img-list" id="imgList-${key}">${initial.map(window._imgCardHTML).join('')}</div>
+      ${hasMore ? `<button class="ov-load-more-btn" data-list="img" data-section="${key}" data-offset="${IMG_PAGE}">
+        Load More — ${list.length - IMG_PAGE} remaining
+      </button>` : ''}`;
+  };
+
   el.innerHTML = `
     <div class="ov-img-stats">
       <div class="ov-img-stat"><span class="ov-img-stat-label">Images</span><span class="ov-img-stat-num neutral">${OV.imagesTotal}</span></div>
-      <div class="ov-img-stat"><span class="ov-img-stat-label">Broken 💔</span><span class="ov-img-stat-num ${OV.imagesBroken>0?'broken':'ok'}">${OV.imagesBroken}</span></div>
+      <div class="ov-img-stat"><span class="ov-img-stat-label">Broken</span><span class="ov-img-stat-num ${OV.imagesBroken>0?'broken':'ok'}">${OV.imagesBroken}</span></div>
       <div class="ov-img-stat"><span class="ov-img-stat-label">Without ALT</span><span class="ov-img-stat-num ${OV.imagesWithoutAlt>0?'problem':'ok'}">${OV.imagesWithoutAlt}</span></div>
       <div class="ov-img-stat"><span class="ov-img-stat-label">Without Title</span><span class="ov-img-stat-num ${OV.imagesWithoutTitle>0?'problem':'ok'}">${OV.imagesWithoutTitle}</span></div>
     </div>
-    ${broken.length ? `<div class="ov-img-section broken-section">💔 Broken Images (${broken.length})</div>${broken.slice(0,MAX).map(imgCard).join('')}${broken.length>MAX?`<div class="ov-truncate-note">… and ${broken.length-MAX} more broken images</div>`:''}` : ''}
-    ${toFix.length  ? `<div class="ov-img-section">⚠ Images to Complete (${toFix.length})</div>${toFix.slice(0,MAX).map(imgCard).join('')}${toFix.length>MAX?`<div class="ov-truncate-note">… and ${toFix.length-MAX} more need attention</div>`:''}` : ''}
-    ${completed.length ? `<div class="ov-img-section">✓ Completed (${completed.length})</div>${completed.slice(0,MAX).map(imgCard).join('')}${completed.length>MAX?`<div class="ov-truncate-note">… and ${completed.length-MAX} more completed</div>`:''}` : ''}
+    ${sectionHTML('broken',    '⚠ Broken Images',       'broken-section', _imgSections.broken)}
+    ${sectionHTML('toFix',     '⚠ Images to Complete',  '',               _imgSections.toFix)}
+    ${sectionHTML('completed', '✓ Completed',            '',               _imgSections.completed)}
     ${!imgs.length ? `<div class="ov-empty"><div class="ov-empty-icon">🖼️</div><div class="ov-empty-text">No images found</div><div class="ov-empty-sub">This page contains no &lt;img&gt; elements.</div></div>` : ''}`;
+
+  // Wire Load More buttons
+  el.querySelectorAll('.ov-load-more-btn[data-list="img"]').forEach(btn => {
+    btn.addEventListener('click', () => loadMoreImages(btn));
+  });
 }
 
-// ── Links ─────────────────────────────────────────────────────────────────────
+function loadMoreImages(btn) {
+  const section = btn.dataset.section;
+  const offset  = parseInt(btn.dataset.offset);
+  const list    = _imgSections[section] || [];
+  const next    = list.slice(offset, offset + IMG_PAGE);
+  const remaining = list.length - offset - IMG_PAGE;
+
+  // Append new cards before the button
+  const container = document.getElementById(`imgList-${section}`);
+  container.insertAdjacentHTML('beforeend', next.map(window._imgCardHTML).join(''));
+
+  if (remaining > 0) {
+    btn.dataset.offset = offset + IMG_PAGE;
+    btn.textContent    = `Load More — ${remaining} remaining`;
+  } else {
+    btn.remove(); // All loaded — hide button
+  }
+}
+
+// ── Links (with Load More) ────────────────────────────────────────────────────
+const LINK_PAGE = 20;
+let _linksAll = [];
+
 function renderOvLinks(OV) {
   const el    = document.getElementById('ovLinksContent');
-  const links = OV.linksList || [];
-  const sorted = [...links].sort((a, b) => {
+  _linksAll   = [...(OV.linksList || [])].sort((a, b) => {
     const o = l => l.isAnchor?0:l.isInternal?1:2;
     return o(a) - o(b) || b.count - a.count;
   });
-  const MAX = 60;
-  const badge = l => l.isAnchor?`<span class="ov-link-badge badge-anchor">Anchor</span>`:l.isInternal?`<span class="ov-link-badge badge-internal">Internal</span>`:`<span class="ov-link-badge badge-external">External</span>`;
-  const linkItem = l => `<div class="ov-link-item">
+
+  const badge = l => l.isAnchor
+    ? `<span class="ov-link-badge badge-anchor">Anchor</span>`
+    : l.isInternal
+      ? `<span class="ov-link-badge badge-internal">Internal</span>`
+      : `<span class="ov-link-badge badge-external">External</span>`;
+
+  window._linkItemHTML = l => `<div class="ov-link-item">
     <div class="ov-link-row1">${badge(l)}<span class="ov-link-href" title="${esc(l.href)}">${esc(l.href.length>55?l.href.slice(0,52)+'…':l.href)}</span></div>
     <div class="ov-link-title">Title: ${l.title?`<span class="ov-link-title-val">${esc(l.title)}</span>`:`<span class="ov-link-title-miss">not defined</span>`}</div>
     ${l.count>1?`<div class="ov-link-occ">↩ Found ${l.count-1} more occurrence${l.count>2?'s':''} of this link</div>`:''}
   </div>`;
+
+  const initial   = _linksAll.slice(0, LINK_PAGE);
+  const remaining = _linksAll.length - LINK_PAGE;
 
   el.innerHTML = `
     <div class="ov-link-stats">
@@ -880,10 +956,32 @@ function renderOvLinks(OV) {
       <div class="ov-link-stat"><span class="ov-link-stat-label">Internal Unique</span><span class="ov-link-stat-num blue">${OV.internalUniqueLinks||0}</span></div>
       <div class="ov-link-stat"><span class="ov-link-stat-label">Without Title</span><span class="ov-link-stat-num ${OV.linksWithoutTitle>0?'warn':'blue'}">${OV.linksWithoutTitle||0}</span></div>
     </div>
-    <div class="ov-links-label">Links &lt;A /&gt;</div>
-    ${sorted.slice(0,MAX).map(linkItem).join('')}
-    ${sorted.length>MAX?`<div class="ov-truncate-note">Showing ${MAX} of ${sorted.length} unique links</div>`:''}
-    ${!sorted.length?`<div class="ov-empty"><div class="ov-empty-icon">🔗</div><div class="ov-empty-text">No links found</div><div class="ov-empty-sub">This page contains no anchor elements.</div></div>`:''}`;
+    <div class="ov-links-label">Links &lt;a/&gt;</div>
+    <div id="linkListContainer">${initial.map(window._linkItemHTML).join('')}</div>
+    ${remaining > 0 ? `<button class="ov-load-more-btn" data-list="links" data-offset="${LINK_PAGE}">
+      Load More — ${remaining} remaining
+    </button>` : ''}
+    ${!_linksAll.length ? `<div class="ov-empty"><div class="ov-empty-icon">🔗</div><div class="ov-empty-text">No links found</div><div class="ov-empty-sub">This page contains no anchor elements.</div></div>` : ''}`;
+
+  // Wire Load More
+  const btn = el.querySelector('.ov-load-more-btn[data-list="links"]');
+  if (btn) btn.addEventListener('click', () => loadMoreLinks(btn));
+}
+
+function loadMoreLinks(btn) {
+  const offset    = parseInt(btn.dataset.offset);
+  const next      = _linksAll.slice(offset, offset + LINK_PAGE);
+  const remaining = _linksAll.length - offset - LINK_PAGE;
+
+  document.getElementById('linkListContainer')
+    .insertAdjacentHTML('beforeend', next.map(window._linkItemHTML).join(''));
+
+  if (remaining > 0) {
+    btn.dataset.offset = offset + LINK_PAGE;
+    btn.textContent    = `Load More — ${remaining} remaining`;
+  } else {
+    btn.remove();
+  }
 }
 
 // ── Schema ────────────────────────────────────────────────────────────────────
