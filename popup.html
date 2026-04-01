@@ -420,6 +420,7 @@
         Suggestions <span class="tab-chip" id="chipSugg">0</span>
       </button>
       <button class="tab-btn" data-tab="details">Details</button>
+      <button class="tab-btn" data-tab="overview">Overview</button>
     </div>
 
     <!-- Panels -->
@@ -432,6 +433,45 @@
       </div>
       <div class="panel" id="panel-details">
         <div id="detailsContent"></div>
+      </div>
+
+      <!-- ─── OVERVIEW PANEL ─────────────────────────────────── -->
+      <div class="panel" id="panel-overview">
+
+        <!-- Inner sub-tabs -->
+        <div class="ov-tabs-bar">
+          <button class="ov-tab-btn active" data-ovtab="summary">Page Summary</button>
+          <button class="ov-tab-btn" data-ovtab="headers">Headers</button>
+          <button class="ov-tab-btn" data-ovtab="images">Images</button>
+          <button class="ov-tab-btn" data-ovtab="links">Links</button>
+          <button class="ov-tab-btn" data-ovtab="schema">Schema</button>
+        </div>
+
+        <!-- Page Summary -->
+        <div class="ov-panel active" id="ovpanel-summary">
+          <div id="ovSummaryContent"></div>
+        </div>
+
+        <!-- Headers Tree -->
+        <div class="ov-panel" id="ovpanel-headers">
+          <div id="ovHeadersContent"></div>
+        </div>
+
+        <!-- Images -->
+        <div class="ov-panel" id="ovpanel-images">
+          <div id="ovImagesContent"></div>
+        </div>
+
+        <!-- Links -->
+        <div class="ov-panel" id="ovpanel-links">
+          <div id="ovLinksContent"></div>
+        </div>
+
+        <!-- Schema -->
+        <div class="ov-panel" id="ovpanel-schema">
+          <div id="ovSchemaContent"></div>
+        </div>
+
       </div>
     </div>
   </div>
