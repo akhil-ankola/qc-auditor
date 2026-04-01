@@ -1,4 +1,4 @@
-// content.js — QC Auditor Phase 2  |  Smart, conditional, no-duplicate audits
+// content.js — QC Auditor v2.0  |  Phase 3: Broken Images + full audit
 if (!window.__qcAuditorLoaded) {
   window.__qcAuditorLoaded = true;
 
@@ -13,13 +13,12 @@ if (!window.__qcAuditorLoaded) {
     };
 
     // ══════════════════════════════════════════════════════════════════
-    //  SEO  (lang & altText NOT here — source of truth is A11y)
+    //  SEO
     // ══════════════════════════════════════════════════════════════════
     const seo = data.seo;
     seo.title       = document.title || '';
     seo.titleLength = seo.title.length;
 
-    // Meta tags
     seo.metaDescription = '';
     seo.ogTitle = ''; seo.ogDescription = ''; seo.ogImage = '';
     seo.ogType  = ''; seo.ogUrl = '';
@@ -48,16 +47,13 @@ if (!window.__qcAuditorLoaded) {
 
     seo.metaDescriptionLength = seo.metaDescription.length;
 
-    // Canonical
     const canonEl = document.querySelector('link[rel="canonical"]');
     seo.canonical = canonEl ? (canonEl.getAttribute('href') || '') : '';
 
-    // Favicon
     seo.favicon = !!(document.querySelector(
       'link[rel="icon"], link[rel="shortcut icon"], link[rel="apple-touch-icon"]'
     ));
 
-    // Headings
     seo.h1Count = document.querySelectorAll('h1').length;
     seo.h2Count = document.querySelectorAll('h2').length;
     seo.h3Count = document.querySelectorAll('h3').length;
@@ -67,7 +63,6 @@ if (!window.__qcAuditorLoaded) {
     seo.h1Texts = [...document.querySelectorAll('h1')]
       .map(h => h.textContent.trim().slice(0, 80)).slice(0, 3);
 
-    // Heading hierarchy
     seo.headingHierarchyOk = true;
     let lastLevel = 0;
     for (const h of document.querySelectorAll('h1,h2,h3,h4,h5,h6')) {
@@ -76,55 +71,38 @@ if (!window.__qcAuditorLoaded) {
       lastLevel = lvl;
     }
 
-    // Structured data
-    // Structured data — collect full content for Schema tab
+    // JSON-LD schemas (full content for Schema tab)
     const schemaScripts = [...document.querySelectorAll('script[type="application/ld+json"]')];
     seo.jsonLD = schemaScripts.length > 0;
-
     data.overview.schemas = schemaScripts.map((script, idx) => {
       const raw = (script.textContent || '').trim();
-      let parsed = null;
-      let error  = null;
+      let parsed = null, error = null;
       try { parsed = JSON.parse(raw); } catch (e) { error = e.message; }
       return {
-        index: idx,
-        raw,
-        parsed,
-        error,
-        type: parsed ? (Array.isArray(parsed) ? parsed.map(p => p['@type']).filter(Boolean).join(', ') : (parsed['@type'] || 'Unknown')) : 'Parse Error'
+        index: idx, raw, parsed, error,
+        type: parsed
+          ? (Array.isArray(parsed)
+              ? parsed.map(p => p['@type']).filter(Boolean).join(', ')
+              : (parsed['@type'] || 'Unknown'))
+          : 'Parse Error'
       };
     });
 
-    // Image count
     seo.totalImages = document.querySelectorAll('img').length;
 
-    // Links analysis
-    seo.internalLinks       = 0;
-    seo.externalLinks       = 0;
-    seo.nonDescriptiveLinks = 0;
-    seo.emptyLinks          = 0;
-    seo.linksWithTitle      = 0;
-
-    const VAGUE_TEXTS = new Set([
-      'click here','here','read more','more','learn more',
-      'link','click','go','this','this link','details','info'
-    ]);
-
+    // Links
+    seo.internalLinks = 0; seo.externalLinks = 0;
+    seo.nonDescriptiveLinks = 0; seo.emptyLinks = 0; seo.linksWithTitle = 0;
+    const VAGUE = new Set(['click here','here','read more','more','learn more','link','click','go','this','this link','details','info']);
     document.querySelectorAll('a').forEach(link => {
       const href  = link.getAttribute('href') || '';
       const text  = link.textContent.trim().toLowerCase();
       const title = link.getAttribute('title');
       if (title) seo.linksWithTitle++;
-      if (!href || href === '#' || href.startsWith('javascript:')) {
-        seo.emptyLinks++;
-        return;
-      }
-      if (href.startsWith('http') && !href.includes(hostname)) {
-        seo.externalLinks++;
-      } else if (!href.startsWith('mailto:') && !href.startsWith('tel:')) {
-        seo.internalLinks++;
-      }
-      if (text && VAGUE_TEXTS.has(text)) seo.nonDescriptiveLinks++;
+      if (!href || href === '#' || href.startsWith('javascript:')) { seo.emptyLinks++; return; }
+      if (href.startsWith('http') && !href.includes(hostname)) { seo.externalLinks++; }
+      else if (!href.startsWith('mailto:') && !href.startsWith('tel:')) { seo.internalLinks++; }
+      if (text && VAGUE.has(text)) seo.nonDescriptiveLinks++;
     });
 
     // ══════════════════════════════════════════════════════════════════
@@ -137,10 +115,7 @@ if (!window.__qcAuditorLoaded) {
     perf.lazyImages            = document.querySelectorAll('img[loading="lazy"]').length;
     perf.domSize               = document.querySelectorAll('*').length;
     perf.inlineStyles          = document.querySelectorAll('[style]').length;
-    perf.renderBlockingScripts = document.querySelectorAll(
-      'script[src]:not([async]):not([defer])'
-    ).length;
-    perf.scriptsWithoutAsyncDefer = perf.renderBlockingScripts;
+    perf.renderBlockingScripts = document.querySelectorAll('script[src]:not([async]):not([defer])').length;
 
     const webpSrc     = [...document.querySelectorAll('img[src]')]
       .filter(img => /\.webp(\?.*)?$/i.test(img.getAttribute('src') || '')).length;
@@ -167,13 +142,11 @@ if (!window.__qcAuditorLoaded) {
       const resources = performance.getEntriesByType('resource');
       perf.totalResources    = resources.length;
       perf.totalTransferSize = resources.reduce((s, r) => s + (r.transferSize || 0), 0);
-      perf.largeImagesCount  = resources.filter(
-        r => r.initiatorType === 'img' && (r.transferSize || 0) > 204800
-      ).length;
+      perf.largeImagesCount  = resources.filter(r => r.initiatorType === 'img' && (r.transferSize || 0) > 204800).length;
     } catch (e) {}
 
     // ══════════════════════════════════════════════════════════════════
-    //  ACCESSIBILITY  (source of truth for lang + alt)
+    //  ACCESSIBILITY
     // ══════════════════════════════════════════════════════════════════
     const a11y = data.accessibility;
     a11y.langAttribute = document.documentElement.lang || '';
@@ -192,19 +165,16 @@ if (!window.__qcAuditorLoaded) {
       if (alt && POOR_ALTS.has(alt)) a11y.poorAltCount++;
     });
 
-    a11y.hasForms            = document.querySelector('form') !== null;
+    a11y.hasForms = document.querySelector('form') !== null;
     a11y.inputsWithoutLabels = 0;
     if (a11y.hasForms) {
-      const SKIP_TYPES = new Set(['hidden','submit','button','reset','image']);
+      const SKIP = new Set(['hidden','submit','button','reset','image']);
       document.querySelectorAll('input').forEach(input => {
-        if (SKIP_TYPES.has((input.type || '').toLowerCase())) return;
-        const id          = input.id;
-        const hasLabelFor = id && document.querySelector(`label[for="${CSS.escape(id)}"]`);
-        const hasAriaLabel = input.getAttribute('aria-label');
-        const hasAriaBy    = input.getAttribute('aria-labelledby');
-        const hasTitle     = input.getAttribute('title');
-        const inLabel      = !!input.closest('label');
-        if (!hasLabelFor && !hasAriaLabel && !hasAriaBy && !hasTitle && !inLabel) {
+        if (SKIP.has((input.type || '').toLowerCase())) return;
+        const id = input.id;
+        if (!( (id && document.querySelector(`label[for="${CSS.escape(id)}"]`)) ||
+               input.getAttribute('aria-label') || input.getAttribute('aria-labelledby') ||
+               input.getAttribute('title') || input.closest('label') )) {
           a11y.inputsWithoutLabels++;
         }
       });
@@ -212,18 +182,17 @@ if (!window.__qcAuditorLoaded) {
 
     a11y.buttonsWithoutText = 0;
     document.querySelectorAll('button').forEach(btn => {
-      if (!btn.textContent.trim() &&
-          !btn.getAttribute('aria-label') && !btn.getAttribute('aria-labelledby') &&
-          !btn.getAttribute('title') && !btn.querySelector('img[alt]') && !btn.querySelector('title')) {
+      if (!btn.textContent.trim() && !btn.getAttribute('aria-label') &&
+          !btn.getAttribute('aria-labelledby') && !btn.getAttribute('title') &&
+          !btn.querySelector('img[alt]') && !btn.querySelector('title')) {
         a11y.buttonsWithoutText++;
       }
     });
 
     a11y.linksWithoutText = 0;
     document.querySelectorAll('a[href]').forEach(link => {
-      if (!link.textContent.trim() &&
-          !link.getAttribute('aria-label') && !link.getAttribute('title') &&
-          !link.querySelector('img[alt]')) {
+      if (!link.textContent.trim() && !link.getAttribute('aria-label') &&
+          !link.getAttribute('title') && !link.querySelector('img[alt]')) {
         a11y.linksWithoutText++;
       }
     });
@@ -240,9 +209,7 @@ if (!window.__qcAuditorLoaded) {
     ).length;
 
     a11y.tabindexAbuse     = document.querySelectorAll('[tabindex]:not([tabindex="-1"]):not([tabindex="0"])').length;
-    a11y.focusKilledInline = document.querySelectorAll(
-      '[style*="outline:none"],[style*="outline: none"],[style*="outline:0"],[style*="outline: 0"]'
-    ).length;
+    a11y.focusKilledInline = document.querySelectorAll('[style*="outline:none"],[style*="outline: none"],[style*="outline:0"],[style*="outline: 0"]').length;
 
     a11y.focusCssKilled = false;
     try {
@@ -269,17 +236,13 @@ if (!window.__qcAuditorLoaded) {
     bp.charsetMeta     = bp.charsetMeta || false;
     bp.doctypePresent  = !!document.doctype;
 
-    const SEMANTIC_TAGS = [
-      'article','section','aside','main','nav','header','footer',
-      'figure','figcaption','time','mark','details','summary','address'
-    ];
-    bp.semanticTagsUsed  = SEMANTIC_TAGS.filter(t => document.querySelectorAll(t).length > 0);
+    const SEMANTIC = ['article','section','aside','main','nav','header','footer','figure','figcaption','time','mark','details','summary','address'];
+    bp.semanticTagsUsed  = SEMANTIC.filter(t => document.querySelectorAll(t).length > 0);
     bp.semanticTagsCount = bp.semanticTagsUsed.length;
     bp.hasSemanticHTML   = bp.semanticTagsCount >= 3;
 
     bp.deprecatedTags = [];
-    ['center','font','strike','big','tt','frame','frameset',
-     'noframes','applet','basefont','blink','marquee'].forEach(tag => {
+    ['center','font','strike','big','tt','frame','frameset','noframes','applet','basefont','blink','marquee'].forEach(tag => {
       if (document.querySelectorAll(tag).length > 0) bp.deprecatedTags.push(tag);
     });
 
@@ -298,84 +261,75 @@ if (!window.__qcAuditorLoaded) {
 
     bp.mixedContent = false;
     if (bp.isHttps) {
-      const httpResources = [...document.querySelectorAll(
-        'img[src],script[src],link[href],source[src],iframe[src]'
-      )].filter(el => {
-        const src = el.getAttribute('src') || el.getAttribute('href') || '';
-        return src.startsWith('http:');
-      });
-      bp.mixedContent = httpResources.length > 0;
+      const httpRes = [...document.querySelectorAll('img[src],script[src],link[href],source[src],iframe[src]')]
+        .filter(el => (el.getAttribute('src') || el.getAttribute('href') || '').startsWith('http:'));
+      bp.mixedContent = httpRes.length > 0;
     }
 
     // ══════════════════════════════════════════════════════════════════
-    //  OVERVIEW  (Page Summary, Headers Tree, Images List, Links List)
+    //  OVERVIEW  (Summary, Headers, Images with Broken, Links, Schema)
     // ══════════════════════════════════════════════════════════════════
     const ov = data.overview;
-
-    // keywords & robots already set in meta loop above
     ov.keywords = ov.keywords || '';
     ov.robots   = ov.robots   || '';
     ov.lang     = a11y.langAttribute || '';
 
-    // Heading tree — full structure for visual display
-    ov.headingsTree = [...document.querySelectorAll('h1,h2,h3,h4,h5,h6')]
-      .map(h => ({
-        level: parseInt(h.tagName[1]),
-        text:  h.textContent.trim().replace(/\s+/g, ' ').slice(0, 120)
-      }))
-      .slice(0, 400);
+    // Heading tree
+    ov.headingsTree = [...document.querySelectorAll('h1,h2,h3,h4,h5,h6')].map(h => ({
+      level: parseInt(h.tagName[1]),
+      text:  h.textContent.trim().replace(/\s+/g, ' ').slice(0, 120)
+    })).slice(0, 400);
 
-    ov.h1Count = seo.h1Count;
-    ov.h2Count = seo.h2Count;
-    ov.h3Count = seo.h3Count;
-    ov.h4Count = seo.h4Count || 0;
-    ov.h5Count = seo.h5Count || 0;
-    ov.h6Count = seo.h6Count || 0;
+    ov.h1Count = seo.h1Count; ov.h2Count = seo.h2Count; ov.h3Count = seo.h3Count;
+    ov.h4Count = seo.h4Count; ov.h5Count = seo.h5Count; ov.h6Count = seo.h6Count;
 
-    // Images list — for Overview Images tab
+    // ── Images list — with broken detection ────────────────────────
+    const POOR_ALTS_SET = new Set(['image','photo','picture','img','graphic','icon','logo','banner','thumbnail']);
+
     ov.imagesList = [...document.querySelectorAll('img')].map(img => {
-      const rawSrc  = img.getAttribute('src') || img.getAttribute('data-src') || img.getAttribute('data-lazy-src') || '';
-      const src     = rawSrc.slice(0, 300);
-      // Extract just the filename from the path
+      const rawSrc   = img.getAttribute('src') || img.getAttribute('data-src') || img.getAttribute('data-lazy-src') || '';
+      const src      = rawSrc.slice(0, 300);
       const filename = rawSrc.split('?')[0].split('/').filter(Boolean).pop() || rawSrc.slice(-40) || '(no src)';
-      const altAttr  = img.getAttribute('alt');   // null = attribute missing entirely
+      const altAttr  = img.getAttribute('alt');
       const titleAttr = img.getAttribute('title') || '';
       const hasAlt   = altAttr !== null && altAttr.trim().length > 0;
       const hasTitle = titleAttr.trim().length > 0;
+      const poorAlt  = hasAlt && POOR_ALTS_SET.has((altAttr || '').toLowerCase().trim());
+
+      // Broken image detection: loaded but rendered as 0×0 (404 / bad src)
+      const isBroken = img.complete && img.naturalWidth === 0 && rawSrc.length > 0;
+
       return {
         src, filename: filename.slice(0, 80),
-        alt:   altAttr,          // null = missing, '' = empty, string = value
-        title: titleAttr || '',
-        hasAlt, hasTitle,
-        complete: hasAlt && hasTitle
+        alt: altAttr, title: titleAttr || '',
+        hasAlt, hasTitle, poorAlt,
+        complete: hasAlt && hasTitle && !isBroken,
+        broken: isBroken,
+        width:  img.naturalWidth  || img.getAttribute('width')  || 0,
+        height: img.naturalHeight || img.getAttribute('height') || 0
       };
     }).slice(0, 250);
 
     ov.imagesTotal        = ov.imagesList.length;
     ov.imagesWithoutAlt   = ov.imagesList.filter(i => !i.hasAlt).length;
     ov.imagesWithoutTitle = ov.imagesList.filter(i => !i.hasTitle).length;
+    ov.imagesBroken       = ov.imagesList.filter(i => i.broken).length;   // ← NEW
 
-    // Links list — deduplicated with occurrence counts
+    // ── Links list ────────────────────────────────────────────────
     const linksMap = new Map();
     let totalLinks = 0;
-
     document.querySelectorAll('a').forEach(link => {
       totalLinks++;
       const rawHref = (link.getAttribute('href') || '').trim();
       if (!rawHref) return;
-      const title    = (link.getAttribute('title') || '').trim();
-      const text     = link.textContent.trim().replace(/\s+/g, ' ').slice(0, 80);
-      const isAnchor = rawHref.startsWith('#');
+      const title      = (link.getAttribute('title') || '').trim();
+      const text       = link.textContent.trim().replace(/\s+/g, ' ').slice(0, 80);
+      const isAnchor   = rawHref.startsWith('#');
       const isExternal = rawHref.startsWith('http') && !rawHref.includes(hostname);
-      const isInternal = !isExternal && !isAnchor &&
-                         !rawHref.startsWith('mailto:') &&
-                         !rawHref.startsWith('tel:') &&
-                         !rawHref.startsWith('javascript:');
-      const href = rawHref.slice(0, 200);
-
+      const isInternal = !isExternal && !isAnchor && !rawHref.startsWith('mailto:') && !rawHref.startsWith('tel:') && !rawHref.startsWith('javascript:');
+      const href       = rawHref.slice(0, 200);
       if (linksMap.has(href)) {
         linksMap.get(href).count++;
-        // Update title if we found one
         if (!linksMap.get(href).title && title) linksMap.get(href).title = title;
         if (!linksMap.get(href).text  && text)  linksMap.get(href).text  = text;
       } else {
@@ -383,16 +337,15 @@ if (!window.__qcAuditorLoaded) {
       }
     });
 
-    ov.linksList            = [...linksMap.values()].slice(0, 300);
-    ov.totalLinks           = totalLinks;
-    ov.uniqueLinks          = linksMap.size;
-    ov.internalUniqueLinks  = [...linksMap.values()].filter(l => l.isInternal).length;
-    ov.linksWithoutTitle    = [...linksMap.values()].filter(l => !l.title).length;
+    ov.linksList           = [...linksMap.values()].slice(0, 300);
+    ov.totalLinks          = totalLinks;
+    ov.uniqueLinks         = linksMap.size;
+    ov.internalUniqueLinks = [...linksMap.values()].filter(l => l.isInternal).length;
+    ov.linksWithoutTitle   = [...linksMap.values()].filter(l => !l.title).length;
 
     return data;
   }
 
-  // Message listener
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'collectData') {
       try { sendResponse({ success: true, data: collectAuditData() }); }

@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
   "name": "QC Auditor – Website Quality Checker",
-  "version": "1.0.0",
-  "description": "Instantly analyze any website quality — SEO, Performance, Accessibility & Best Practices scored out of 100 with actionable fixes.",
-  "permissions": ["activeTab", "scripting", "tabs"],
+  "version": "2.0.0",
+  "description": "Instantly analyze any website — SEO, Performance, Accessibility & Best Practices scored out of 100 with actionable fixes, history tracking, and SEO X-Ray.",
+  "permissions": ["activeTab", "scripting", "tabs", "storage"],
   "host_permissions": ["<all_urls>"],
   "action": {
     "default_popup": "popup.html",
