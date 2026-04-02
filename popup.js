@@ -231,6 +231,17 @@ const MAX_HISTORY = 10;
     .ov-empty-text { font-size: 12px; font-weight: 700; color: var(--t1); }
     .ov-empty-sub  { font-size: 11px; color: var(--t4); }
 
+    /* ── Copy button ──────────────────────────────────────────── */
+    .ov-copy-btn {
+      width: 22px; height: 22px; border-radius: 5px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      background: none; border: 1px solid var(--border);
+      color: var(--t4); cursor: pointer; transition: all .15s;
+      padding: 0;
+    }
+    .ov-copy-btn:hover { background: var(--blue-lt); border-color: var(--blue); color: var(--blue); }
+    .ov-copy-btn.copied { background: var(--green-lt); border-color: var(--green); color: var(--green); }
+
     /* ── Load More button ─────────────────────────────────────── */
     .ov-load-more-btn {
       display: flex; align-items: center; justify-content: center;
@@ -836,6 +847,22 @@ function renderOvHeaders(OV) {
     <div class="ov-h-counts">${cc('H1',OV.h1Count)}${cc('H2',OV.h2Count)}${cc('H3',OV.h3Count)}${cc('H4',OV.h4Count)}${cc('H5',OV.h5Count)}${cc('H6',OV.h6Count)}</div>`;
 }
 
+// ── Copy to clipboard helper ──────────────────────────────────────────────────
+function copyToClipboard(text, btn) {
+  navigator.clipboard.writeText(text).then(() => {
+    btn.classList.add('copied');
+    btn.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+    setTimeout(() => {
+      btn.classList.remove('copied');
+      btn.innerHTML = copyIconSVG();
+    }, 1500);
+  });
+}
+
+function copyIconSVG() {
+  return `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
+}
+
 // ── Images (with Broken section + Load More) ──────────────────────────────────
 const IMG_PAGE = 15;   // items per "Load More" batch
 let _imgSections = {}; // { broken: [], toFix: [], completed: [] }
@@ -865,7 +892,10 @@ function renderOvImages(OV) {
       </div>
       <div class="ov-img-info">
         ${img.broken ? '<span class="ov-img-broken-badge">⚠ 404 / Broken</span>' : ''}
-        <div class="ov-img-filename" title="${esc(img.src)}">${esc(img.filename)}</div>
+        <div style="display:flex;align-items:center;gap:5px;margin-bottom:3px;">
+          <button class="ov-copy-btn" data-copy="${esc(img.src)}" title="Copy URL">${copyIconSVG()}</button>
+          <span class="ov-img-filename" title="${esc(img.src)}">${esc(img.filename)}</span>
+        </div>
         <div class="ov-img-attrs">
           <span class="ov-img-attr"><span class="ov-img-attr-key">ALT:</span>${attrVal(img.alt, img.hasAlt)}</span>
           <span class="ov-img-attr"><span class="ov-img-attr-key">Title:</span>${attrVal(img.title||null, img.hasTitle)}</span>
@@ -901,6 +931,12 @@ function renderOvImages(OV) {
   // Wire Load More buttons
   el.querySelectorAll('.ov-load-more-btn[data-list="img"]').forEach(btn => {
     btn.addEventListener('click', () => loadMoreImages(btn));
+  });
+
+  // Wire copy buttons via delegation
+  el.addEventListener('click', e => {
+    const btn = e.target.closest('.ov-copy-btn[data-copy]');
+    if (btn) copyToClipboard(btn.dataset.copy, btn);
   });
 }
 
@@ -941,7 +977,10 @@ function renderOvLinks(OV) {
       : `<span class="ov-link-badge badge-external">External</span>`;
 
   window._linkItemHTML = l => `<div class="ov-link-item">
-    <div class="ov-link-row1">${badge(l)}<span class="ov-link-href" title="${esc(l.href)}">${esc(l.href.length>55?l.href.slice(0,52)+'…':l.href)}</span></div>
+    <div class="ov-link-row1">
+      <button class="ov-copy-btn" data-copy="${esc(l.href)}" title="Copy URL">${copyIconSVG()}</button>
+      ${badge(l)}<span class="ov-link-href" title="${esc(l.href)}">${esc(l.href.length>55?l.href.slice(0,52)+'…':l.href)}</span>
+    </div>
     <div class="ov-link-title">Title: ${l.title?`<span class="ov-link-title-val">${esc(l.title)}</span>`:`<span class="ov-link-title-miss">not defined</span>`}</div>
     ${l.count>1?`<div class="ov-link-occ">↩ Found ${l.count-1} more occurrence${l.count>2?'s':''} of this link</div>`:''}
   </div>`;
@@ -966,6 +1005,12 @@ function renderOvLinks(OV) {
   // Wire Load More
   const btn = el.querySelector('.ov-load-more-btn[data-list="links"]');
   if (btn) btn.addEventListener('click', () => loadMoreLinks(btn));
+
+  // Wire copy buttons via delegation
+  el.addEventListener('click', e => {
+    const copyBtn = e.target.closest('.ov-copy-btn[data-copy]');
+    if (copyBtn) copyToClipboard(copyBtn.dataset.copy, copyBtn);
+  });
 }
 
 function loadMoreLinks(btn) {
