@@ -2,9 +2,18 @@
 // Dark Mode | Score History | Broken Images | SEO X-Ray
 'use strict';
 
-const CIRC    = 2 * Math.PI * 69; // r=69 → 433.54
-const SEV_PTS = { high: 5, medium: 3, low: 1 };
+const CIRC       = 2 * Math.PI * 69; // r=69 → 433.54
+const SEV_PTS    = { high: 5, medium: 3, low: 1 };
 const MAX_HISTORY = 10;
+
+// ── Module-level state (replaces window.* globals) ────────────────────────────
+const IMG_PAGE  = 15;
+const LINK_PAGE = 20;
+let _imgSections  = {};          // { broken[], toFix[], completed[] }
+let _linksAll     = [];          // sorted unique links array
+let _imgCardFn    = null;        // image card renderer (set in renderOvImages)
+let _linkItemFn   = null;        // link item renderer (set in renderOvLinks)
+let _schemaPretty = new Map();   // idx → pretty JSON string (avoids large data-attrs)
 
 // ─── Runtime CSS (Quick Wins, Overview, Schema) ────────────────────────────────
 (function injectCSS() {
@@ -864,8 +873,6 @@ function copyIconSVG() {
 }
 
 // ── Images (with Broken section + Load More) ──────────────────────────────────
-const IMG_PAGE = 15;   // items per "Load More" batch
-let _imgSections = {}; // { broken: [], toFix: [], completed: [] }
 
 function renderOvImages(OV) {
   const el   = document.getElementById('ovImagesContent');
@@ -883,7 +890,7 @@ function renderOvImages(OV) {
     return `<span class="ov-img-attr-val ok">${esc((val||'').slice(0,60))}</span>`;
   };
 
-  window._imgCardHTML = (img) => `
+  _imgCardFn = (img) => `
     <div class="ov-img-card ${img.broken?'is-broken':''}">
       <div class="ov-img-thumb ${img.broken?'broken-thumb':''}">
         ${img.broken
@@ -910,7 +917,7 @@ function renderOvImages(OV) {
     const hasMore = list.length > IMG_PAGE;
     return `
       <div class="ov-img-section ${labelClass}">${labelHTML} (${list.length})</div>
-      <div class="ov-img-list" id="imgList-${key}">${initial.map(window._imgCardHTML).join('')}</div>
+      <div class="ov-img-list" id="imgList-${key}">${initial.map(_imgCardFn).join('')}</div>
       ${hasMore ? `<button class="ov-load-more-btn" data-list="img" data-section="${key}" data-offset="${IMG_PAGE}">
         Load More — ${list.length - IMG_PAGE} remaining
       </button>` : ''}`;
@@ -949,7 +956,7 @@ function loadMoreImages(btn) {
 
   // Append new cards before the button
   const container = document.getElementById(`imgList-${section}`);
-  container.insertAdjacentHTML('beforeend', next.map(window._imgCardHTML).join(''));
+  container.insertAdjacentHTML('beforeend', next.map(_imgCardFn).join(''));
 
   if (remaining > 0) {
     btn.dataset.offset = offset + IMG_PAGE;
@@ -960,8 +967,6 @@ function loadMoreImages(btn) {
 }
 
 // ── Links (with Load More) ────────────────────────────────────────────────────
-const LINK_PAGE = 20;
-let _linksAll = [];
 
 function renderOvLinks(OV) {
   const el    = document.getElementById('ovLinksContent');
@@ -976,7 +981,7 @@ function renderOvLinks(OV) {
       ? `<span class="ov-link-badge badge-internal">Internal</span>`
       : `<span class="ov-link-badge badge-external">External</span>`;
 
-  window._linkItemHTML = l => `<div class="ov-link-item">
+  _linkItemFn = l => `<div class="ov-link-item">
     <div class="ov-link-row1">
       <button class="ov-copy-btn" data-copy="${esc(l.href)}" title="Copy URL">${copyIconSVG()}</button>
       ${badge(l)}<span class="ov-link-href" title="${esc(l.href)}">${esc(l.href.length>55?l.href.slice(0,52)+'…':l.href)}</span>
@@ -996,7 +1001,7 @@ function renderOvLinks(OV) {
       <div class="ov-link-stat"><span class="ov-link-stat-label">Without Title</span><span class="ov-link-stat-num ${OV.linksWithoutTitle>0?'warn':'blue'}">${OV.linksWithoutTitle||0}</span></div>
     </div>
     <div class="ov-links-label">Links &lt;a/&gt;</div>
-    <div id="linkListContainer">${initial.map(window._linkItemHTML).join('')}</div>
+    <div id="linkListContainer">${initial.map(_linkItemFn).join('')}</div>
     ${remaining > 0 ? `<button class="ov-load-more-btn" data-list="links" data-offset="${LINK_PAGE}">
       Load More — ${remaining} remaining
     </button>` : ''}
@@ -1019,7 +1024,7 @@ function loadMoreLinks(btn) {
   const remaining = _linksAll.length - offset - LINK_PAGE;
 
   document.getElementById('linkListContainer')
-    .insertAdjacentHTML('beforeend', next.map(window._linkItemHTML).join(''));
+    .insertAdjacentHTML('beforeend', next.map(_linkItemFn).join(''));
 
   if (remaining > 0) {
     btn.dataset.offset = offset + LINK_PAGE;
@@ -1061,9 +1066,17 @@ function renderOvSchema(OV) {
       });
   }
 
+  // Populate schema pretty-print store (avoids large data-* attributes)
+  _schemaPretty.clear();
+  schemas.forEach((schema, i) => {
+    if (schema.parsed && !schema.error) {
+      _schemaPretty.set(i, JSON.stringify(schema.parsed, null, 2));
+    }
+  });
+
   const blocksHTML = schemas.map((schema, i) => {
     const hasError = !!schema.error;
-    const pretty   = !hasError ? JSON.stringify(schema.parsed, null, 2) : null;
+    const pretty   = _schemaPretty.get(i) || null;
     return `<div class="ov-schema-block">
       <div class="ov-schema-block-head">
         <div class="ov-schema-block-left">
@@ -1073,7 +1086,7 @@ function renderOvSchema(OV) {
         </div>
         <div style="display:flex;align-items:center;gap:6px;">
           ${!hasError ? `
-          <button class="ov-copy-btn" data-copy="${esc(pretty)}" title="Copy JSON" style="width:26px;height:26px;">
+          <button class="ov-copy-btn" data-schema-copy="${i}" title="Copy JSON" style="width:26px;height:26px;">
             ${copyIconSVG()}
           </button>
           <button class="ov-schema-export-btn" data-schema-idx="${i}">
@@ -1110,11 +1123,15 @@ function renderOvSchema(OV) {
     });
   });
 
-  // Copy buttons on schema blocks
-  el.addEventListener('click', e => {
-    const btn = e.target.closest('.ov-copy-btn[data-copy]');
-    if (btn) copyToClipboard(btn.dataset.copy, btn);
+  // Schema copy buttons — read from _schemaPretty Map (no large data-attrs)
+  el.querySelectorAll('[data-schema-copy]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const pretty = _schemaPretty.get(parseInt(btn.dataset.schemaCopy));
+      if (pretty) copyToClipboard(pretty, btn);
+    });
   });
+
+  // Export all
   const expAll = el.querySelector('#exportAllSchemas');
   if (expAll) expAll.addEventListener('click', () => {
     const valid = schemas.map(s=>s.parsed).filter(Boolean);

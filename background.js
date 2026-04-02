@@ -1,14 +1,13 @@
-// QC Auditor – Background Service Worker (MV3)
+// QC Auditor v2.0 — Background Service Worker (MV3)
 
 chrome.runtime.onInstalled.addListener(({ reason }) => {
+  // Set default storage values on first install
   if (reason === 'install') {
-    console.log('[QC Auditor] Installed successfully.');
-  } else if (reason === 'update') {
-    console.log('[QC Auditor] Updated to', chrome.runtime.getManifest().version);
+    chrome.storage.local.set({ darkMode: undefined });
   }
 });
 
-// Keep service worker alive during audit messaging
+// Respond to keepalive pings from popup during long audits
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'ping') {
     sendResponse({ status: 'alive' });

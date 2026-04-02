@@ -1,0 +1,10 @@
+{
+  "appName": {
+    "message": "QC Auditor – Website Quality Checker",
+    "description": "Extension name shown in Chrome Web Store and browser UI"
+  },
+  "appDescription": {
+    "message": "Audit any website for SEO, Performance, Accessibility & Best Practices. Score out of 100 with fixes, history, and SEO X-Ray.",
+    "description": "Extension description shown in Chrome Web Store"
+  }
+}
