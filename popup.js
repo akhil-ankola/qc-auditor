@@ -565,13 +565,13 @@ function calculateScores(data) {
 
   // ── Performance ───────────────────────────────────────────────────────────
   if (P.loadTime > 0) {
-    if      (P.loadTime >= 4000) fail('perf','Performance','high',`Very slow page load: ${(P.loadTime/1000).toFixed(2)}s — target: <2s`,'Critically slow. 53% of mobile users abandon pages over 3s. Fix: server caching, CDN, image compression, eliminate render-blocking resources.');
-    else if (P.loadTime >= 2000) fail('perf','Performance','medium',`Slow page load: ${(P.loadTime/1000).toFixed(2)}s — target: <2s`,'Above 2s threshold. Quick wins: lazy-load images, code-split JS, compress to WebP/AVIF, enable gzip/Brotli, add a CDN.');
-    else if (P.loadTime >= 1000) fail('perf','Performance','low',`Page load: ${(P.loadTime/1000).toFixed(2)}s — good, room to improve`,'Target <1s for excellent Core Web Vitals. Preload critical fonts/CSS, preconnect to third-party origins.');
+    if      (P.loadTime >= 4000) fail('perf','Performance','high',`Very slow page load: ${(P.loadTime/1000).toFixed(2)}s — target: <2.5s`,'Critically slow. Google data shows page abandonment increases sharply above 3s. Fix: server caching, CDN, image compression, eliminate render-blocking resources.');
+    else if (P.loadTime >= 2500) fail('perf','Performance','medium',`Slow page load: ${(P.loadTime/1000).toFixed(2)}s — target: <2.5s`,'Above Google\'s recommended 2.5s LCP threshold. Quick wins: lazy-load images, code-split JS, compress to WebP/AVIF, enable gzip/Brotli, add a CDN.');
+    else if (P.loadTime >= 1500) fail('perf','Performance','low',`Page load: ${(P.loadTime/1000).toFixed(2)}s — good, room to improve`,'Acceptable but not optimal. Target <1.5s for excellent Core Web Vitals. Preload critical fonts/CSS, preconnect to third-party origins.');
   }
   if (P.ttfb > 0) {
-    if      (P.ttfb >= 600) fail('perf','Performance','high',`High TTFB: ${P.ttfb}ms — target: <200ms`,'Server takes over 600ms before sending any data. Fix: server-side caching (Redis/Memcached), CDN, database query optimization.');
-    else if (P.ttfb >= 200) fail('perf','Performance','medium',`TTFB: ${P.ttfb}ms — target: <200ms`,'Slow server response. Add HTTP cache headers, use a reverse proxy (Nginx/Cloudflare), optimize slow server-side code.');
+    if      (P.ttfb >= 1800) fail('perf','Performance','high',`High TTFB: ${P.ttfb}ms — target: <800ms`,'Server response is critically slow. Google\'s threshold for "needs improvement" is 1800ms. Fix: server-side caching (Redis/Memcached), CDN, database query optimization.');
+    else if (P.ttfb >= 800)  fail('perf','Performance','medium',`TTFB: ${P.ttfb}ms — target: <800ms`,'Slow server response. Google\'s "good" threshold is under 800ms. Add HTTP cache headers, use a reverse proxy (Nginx/Cloudflare), optimize slow server-side code.');
   }
   if      (P.renderBlockingScripts >= 4) fail('perf','Performance','high',`${P.renderBlockingScripts} render-blocking scripts — critical`,'Add defer to DOM-dependent scripts; async to independent ones. Move non-critical scripts after </body>.');
   else if (P.renderBlockingScripts >= 1) fail('perf','Performance','medium',`${P.renderBlockingScripts} render-blocking script(s)`,'Add async or defer. Eliminating blocking scripts is often the highest-impact performance change.');
@@ -743,10 +743,10 @@ function renderDetails(data, scores) {
       ${rows.map(([k,v,c]) => `<div class="detail-row"><span class="detail-key">${esc(k)}</span><span class="detail-val val-${c}">${v}</span></div>`).join('')}
     </div>`;
 
-  const ltCls   = P.loadTime<=0?'neu':P.loadTime<2000?'pass':P.loadTime<4000?'warn':'fail';
-  const ltLabel = P.loadTime<=0?'N/A':P.loadTime<1000?`${(P.loadTime/1000).toFixed(2)}s — Fast ✓`:P.loadTime<2000?`${(P.loadTime/1000).toFixed(2)}s — OK`:P.loadTime<4000?`${(P.loadTime/1000).toFixed(2)}s — Slow ⚠`:`${(P.loadTime/1000).toFixed(2)}s — Critical ✗`;
-  const ttfbCls = P.ttfb<=0?'neu':P.ttfb<200?'pass':P.ttfb<600?'warn':'fail';
-  const ttfbLbl = P.ttfb<=0?'N/A':P.ttfb<200?`${P.ttfb}ms — Excellent ✓`:P.ttfb<600?`${P.ttfb}ms — Slow ⚠ (target: <200ms)`:`${P.ttfb}ms — Critical ✗`;
+  const ltCls   = P.loadTime<=0?'neu':P.loadTime<2500?'pass':P.loadTime<4000?'warn':'fail';
+  const ltLabel = P.loadTime<=0?'N/A':P.loadTime<1500?`${(P.loadTime/1000).toFixed(2)}s — Fast ✓`:P.loadTime<2500?`${(P.loadTime/1000).toFixed(2)}s — OK`:P.loadTime<4000?`${(P.loadTime/1000).toFixed(2)}s — Slow ⚠`:`${(P.loadTime/1000).toFixed(2)}s — Critical ✗`;
+  const ttfbCls = P.ttfb<=0?'neu':P.ttfb<800?'pass':P.ttfb<1800?'warn':'fail';
+  const ttfbLbl = P.ttfb<=0?'N/A':P.ttfb<800?`${P.ttfb}ms — Good ✓`:P.ttfb<1800?`${P.ttfb}ms — Slow ⚠ (target: <800ms)`:`${P.ttfb}ms — Critical ✗`;
   const domCls  = P.domSize<1500?'pass':P.domSize<3000?'warn':'fail';
   const domLbl  = P.domSize<1500?`${P.domSize.toLocaleString()} — OK ✓`:P.domSize<3000?`${P.domSize.toLocaleString()} — Large ⚠`:`${P.domSize.toLocaleString()} — Excessive ✗`;
 
@@ -765,7 +765,7 @@ function renderDetails(data, scores) {
       ['Internal / External', `${S.internalLinks} / ${S.externalLinks}`, 'neu'],
       ['Vague Link Text', `${S.nonDescriptiveLinks} ${S.nonDescriptiveLinks===0?'✓':'⚠'}`, S.nonDescriptiveLinks===0?'pass':'warn'],
     ]) +
-    sec('⚡','Performance',scores.perfScore,[
+    sec('⚡','Performance (Desktop)',scores.perfScore,[
       ['Page Load Time', ltLabel, ltCls],
       ['TTFB', ttfbLbl, ttfbCls],
       ['DOM Content Loaded', P.domContentLoaded>0?`${(P.domContentLoaded/1000).toFixed(2)}s`:'N/A', 'neu'],
