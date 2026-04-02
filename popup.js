@@ -2,7 +2,7 @@
 // Dark Mode | Score History | Broken Images | SEO X-Ray
 'use strict';
 
-const CIRC    = 2 * Math.PI * 62;
+const CIRC    = 2 * Math.PI * 69; // r=69 → 433.54
 const SEV_PTS = { high: 5, medium: 3, low: 1 };
 const MAX_HISTORY = 10;
 
@@ -19,28 +19,28 @@ const MAX_HISTORY = 10;
     .qw-header {
       display: flex; align-items: center; gap: 6px;
       padding: 8px 12px 5px;
-      font-size: 10.5px; font-weight: 700; color: var(--orange);
+      font-size: 11.5px; font-weight: 700; color: var(--orange);
       letter-spacing: .4px; text-transform: uppercase;
     }
     .qw-item {
       display: flex; align-items: flex-start; gap: 8px;
       padding: 5px 12px; border-top: 1px solid var(--border);
-      font-size: 11px; color: var(--t2); line-height: 1.4;
+      font-size: 12px; color: var(--t2); line-height: 1.4;
     }
     .qw-pts {
       background: var(--green); color: #fff; border-radius: 4px;
-      padding: 1px 5px; font-size: 10px; font-weight: 700;
+      padding: 1px 5px; font-size: 11px; font-weight: 700;
       white-space: nowrap; flex-shrink: 0; margin-top: 1px;
     }
     /* ── Issue severity pills ─────────────────────────────────── */
     .issue-sev-pill {
-      border-radius: 4px; padding: 1px 6px; font-size: 9.5px;
+      border-radius: 4px; padding: 1px 6px; font-size: 10.5px;
       font-weight: 700; white-space: nowrap; margin-left: 4px;
     }
     .sev-high   { background: var(--red-lt);    color: var(--red); }
     .sev-medium { background: var(--orange-lt); color: var(--orange); }
     .sev-low    { background: var(--blue-lt);   color: var(--blue); }
-    .sv-hint { font-size: 9.5px; color: var(--t4); margin-left: 3px; font-weight: 400; }
+    .sv-hint { font-size: 10.5px; color: var(--t4); margin-left: 3px; font-weight: 400; }
 
     /* ══════════════════════════════════════════════════════════
        SEO X-RAY — Inner tabs
@@ -54,7 +54,7 @@ const MAX_HISTORY = 10;
     .ov-tabs-bar::-webkit-scrollbar { display: none; }
     .ov-tab-btn {
       padding: 5px 10px 7px; border: none; background: none;
-      cursor: pointer; font-family: inherit; font-size: 11px;
+      cursor: pointer; font-family: inherit; font-size: 12px;
       font-weight: 600; color: var(--t3); position: relative;
       transition: color .15s; border-radius: 4px 4px 0 0;
       white-space: nowrap;
@@ -77,8 +77,8 @@ const MAX_HISTORY = 10;
       padding: 8px 15px; border-bottom: 1px solid var(--border2); gap: 10px;
     }
     .ov-meta-row:last-child { border-bottom: none; }
-    .ov-meta-key { font-size: 11px; font-weight: 700; color: var(--t3); min-width: 110px; flex-shrink: 0; padding-top: 1px; }
-    .ov-meta-val { font-size: 11px; color: var(--t1); line-height: 1.5; word-break: break-word; flex: 1; }
+    .ov-meta-key { font-size: 12px; font-weight: 700; color: var(--t3); min-width: 110px; flex-shrink: 0; padding-top: 1px; }
+    .ov-meta-val { font-size: 12px; color: var(--t1); line-height: 1.5; word-break: break-word; flex: 1; }
     .ov-meta-val.missing { color: var(--red); font-style: italic; }
     .ov-meta-val.warn    { color: var(--orange); }
     .ov-meta-val.good    { color: var(--green); }
@@ -86,8 +86,8 @@ const MAX_HISTORY = 10;
     .ov-stats-grid { display: flex; background: var(--card); border-top: 2px solid var(--border); border-bottom: 1px solid var(--border); margin-top: 6px; transition: background .25s, border-color .25s; }
     .ov-stat-cell  { flex: 1; text-align: center; padding: 10px 4px 8px; border-right: 1px solid var(--border2); }
     .ov-stat-cell:last-child { border-right: none; }
-    .ov-stat-label { font-size: 9.5px; font-weight: 700; color: var(--t4); text-transform: uppercase; letter-spacing: .4px; display: block; margin-bottom: 4px; }
-    .ov-stat-num   { font-size: 17px; font-weight: 800; color: var(--t1); display: block; line-height: 1; }
+    .ov-stat-label { font-size: 10.5px; font-weight: 700; color: var(--t4); text-transform: uppercase; letter-spacing: .4px; display: block; margin-bottom: 4px; }
+    .ov-stat-num   { font-size: 18px; font-weight: 800; color: var(--t1); display: block; line-height: 1; }
     .ov-stat-num.zero { color: var(--border); }
     .ov-stat-num.warn { color: var(--orange); }
     .ov-stat-num.fail { color: var(--red); }
@@ -100,7 +100,7 @@ const MAX_HISTORY = 10;
     }
     .ov-tree-item:hover { background: var(--tree-hover); }
     .ov-h-tag {
-      font-size: 9px; font-weight: 800; padding: 1px 5px; border-radius: 4px;
+      font-size: 10px; font-weight: 800; padding: 1px 5px; border-radius: 4px;
       white-space: nowrap; flex-shrink: 0; letter-spacing: .3px; text-transform: uppercase;
     }
     .ov-h1 { background: var(--blue);    color: #fff; }
@@ -109,26 +109,26 @@ const MAX_HISTORY = 10;
     .ov-h4 { background: var(--orange-lt); color: var(--orange); }
     .ov-h5 { background: var(--green-lt);  color: var(--green); }
     .ov-h6 { background: var(--purple-lt); color: var(--purple); }
-    .ov-tree-text { font-size: 11.5px; color: var(--t1); }
+    .ov-tree-text { font-size: 12.5px; color: var(--t1); }
     .ov-h-counts { display: flex; background: var(--bg); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); margin-top: 6px; transition: background .25s, border-color .25s; }
     .ov-h-count-cell { flex: 1; text-align: center; padding: 8px 2px; border-right: 1px solid var(--border); }
     .ov-h-count-cell:last-child { border-right: none; }
-    .ov-h-count-lbl { font-size: 9.5px; font-weight: 700; color: var(--t4); display: block; }
-    .ov-h-count-num { font-size: 14px; font-weight: 800; color: var(--t1); display: block; }
+    .ov-h-count-lbl { font-size: 10.5px; font-weight: 700; color: var(--t4); display: block; }
+    .ov-h-count-num { font-size: 15px; font-weight: 800; color: var(--t1); display: block; }
     .ov-h-count-num.none { color: var(--border); }
 
     /* ── Images ───────────────────────────────────────────────── */
     .ov-img-stats { display: flex; background: var(--card); border-bottom: 2px solid var(--border); transition: background .25s, border-color .25s; }
     .ov-img-stat  { flex: 1; text-align: center; padding: 12px 4px 10px; border-right: 1px solid var(--border2); }
     .ov-img-stat:last-child { border-right: none; }
-    .ov-img-stat-label { font-size: 9px; font-weight: 700; color: var(--t4); text-transform: uppercase; letter-spacing: .5px; display: block; margin-bottom: 5px; }
-    .ov-img-stat-num   { font-size: 22px; font-weight: 800; line-height: 1; display: block; }
+    .ov-img-stat-label { font-size: 10px; font-weight: 700; color: var(--t4); text-transform: uppercase; letter-spacing: .5px; display: block; margin-bottom: 5px; }
+    .ov-img-stat-num   { font-size: 24px; font-weight: 800; line-height: 1; display: block; }
     .ov-img-stat-num.neutral { color: var(--blue); }
     .ov-img-stat-num.problem { color: var(--red); }
     .ov-img-stat-num.broken  { color: var(--red); }
     .ov-img-stat-num.ok      { color: var(--green); }
 
-    .ov-img-section { padding: 8px 15px 4px; font-size: 10px; font-weight: 800; color: var(--t4); text-transform: uppercase; letter-spacing: .6px; background: var(--bg); border-bottom: 1px solid var(--border); transition: background .25s, border-color .25s; }
+    .ov-img-section { padding: 8px 15px 4px; font-size: 11px; font-weight: 800; color: var(--t4); text-transform: uppercase; letter-spacing: .6px; background: var(--bg); border-bottom: 1px solid var(--border); transition: background .25s, border-color .25s; }
     .ov-img-section.broken-section { color: var(--red); background: var(--red-lt); border-color: var(--red); }
 
     .ov-img-card {
@@ -147,10 +147,10 @@ const MAX_HISTORY = 10;
     .ov-img-thumb img { width: 100%; height: 100%; object-fit: cover; border-radius: 5px; }
     .ov-img-thumb.broken-thumb { background: var(--red-lt); border-color: var(--red); }
     .ov-img-info { flex: 1; min-width: 0; }
-    .ov-img-filename { font-size: 11.5px; font-weight: 700; color: var(--t1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 3px; }
-    .ov-img-broken-badge { font-size: 9.5px; font-weight: 700; background: var(--red); color: #fff; padding: 1px 6px; border-radius: 4px; margin-bottom: 3px; display: inline-block; }
+    .ov-img-filename { font-size: 12.5px; font-weight: 700; color: var(--t1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 3px; }
+    .ov-img-broken-badge { font-size: 10.5px; font-weight: 700; background: var(--red); color: #fff; padding: 1px 6px; border-radius: 4px; margin-bottom: 3px; display: inline-block; }
     .ov-img-attrs { display: flex; gap: 8px; flex-wrap: wrap; }
-    .ov-img-attr  { font-size: 10px; display: flex; align-items: center; gap: 3px; }
+    .ov-img-attr  { font-size: 11px; display: flex; align-items: center; gap: 3px; }
     .ov-img-attr-key { color: var(--t4); font-weight: 600; }
     .ov-img-attr-val.miss  { color: var(--red);    font-weight: 700; }
     .ov-img-attr-val.ok    { color: var(--green);  font-weight: 700; }
@@ -160,11 +160,11 @@ const MAX_HISTORY = 10;
     .ov-link-stats { display: flex; background: var(--card); border-bottom: 2px solid var(--border); transition: background .25s, border-color .25s; }
     .ov-link-stat  { flex: 1; text-align: center; padding: 10px 4px 8px; border-right: 1px solid var(--border2); }
     .ov-link-stat:last-child { border-right: none; }
-    .ov-link-stat-label { font-size: 9px; font-weight: 700; color: var(--t4); text-transform: uppercase; letter-spacing: .4px; display: block; margin-bottom: 4px; }
-    .ov-link-stat-num   { font-size: 18px; font-weight: 800; display: block; line-height: 1; }
+    .ov-link-stat-label { font-size: 10px; font-weight: 700; color: var(--t4); text-transform: uppercase; letter-spacing: .4px; display: block; margin-bottom: 4px; }
+    .ov-link-stat-num   { font-size: 20px; font-weight: 800; display: block; line-height: 1; }
     .ov-link-stat-num.blue { color: var(--blue); }
     .ov-link-stat-num.warn { color: var(--orange); }
-    .ov-links-label { padding: 7px 15px 4px; font-size: 10px; font-weight: 800; color: var(--t4); text-transform: uppercase; letter-spacing: .6px; background: var(--bg); border-bottom: 1px solid var(--border); border-top: 1px solid var(--border); transition: background .25s, border-color .25s; }
+    .ov-links-label { padding: 7px 15px 4px; font-size: 11px; font-weight: 800; color: var(--t4); text-transform: uppercase; letter-spacing: .6px; background: var(--bg); border-bottom: 1px solid var(--border); border-top: 1px solid var(--border); transition: background .25s, border-color .25s; }
     .ov-link-item { padding: 8px 15px; background: var(--card); border-bottom: 1px solid var(--border2); transition: background .12s, border-color .25s; }
     .ov-link-item:last-child { border-bottom: none; }
     .ov-link-row1   { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
@@ -172,37 +172,37 @@ const MAX_HISTORY = 10;
     .badge-anchor   { background: var(--blue-lt);   color: var(--blue); }
     .badge-internal { background: var(--green-lt);  color: var(--green); }
     .badge-external { background: var(--red-lt);    color: var(--red); }
-    .ov-link-href   { font-size: 11px; font-weight: 700; color: var(--t1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
-    .ov-link-title  { font-size: 10.5px; color: var(--t3); margin-bottom: 2px; }
+    .ov-link-href   { font-size: 12px; font-weight: 700; color: var(--t1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
+    .ov-link-title  { font-size: 11.5px; color: var(--t3); margin-bottom: 2px; }
     .ov-link-title .ov-link-title-val  { font-weight: 600; color: var(--t2); }
     .ov-link-title .ov-link-title-miss { color: var(--red); font-style: italic; }
-    .ov-link-occ    { font-size: 10px; color: var(--blue); font-weight: 600; }
+    .ov-link-occ    { font-size: 11px; color: var(--blue); font-weight: 600; }
 
     /* ── Schema ───────────────────────────────────────────────── */
     .ov-schema-stats { display: flex; background: var(--card); border-bottom: 2px solid var(--border); transition: background .25s, border-color .25s; }
     .ov-schema-stat  { flex: 1; text-align: center; padding: 10px 4px 8px; border-right: 1px solid var(--border2); }
     .ov-schema-stat:last-child { border-right: none; }
-    .ov-schema-stat-label { font-size: 9px; font-weight: 700; color: var(--t4); text-transform: uppercase; letter-spacing: .4px; display: block; margin-bottom: 4px; }
-    .ov-schema-stat-num   { font-size: 20px; font-weight: 800; display: block; line-height: 1; }
+    .ov-schema-stat-label { font-size: 10px; font-weight: 700; color: var(--t4); text-transform: uppercase; letter-spacing: .4px; display: block; margin-bottom: 4px; }
+    .ov-schema-stat-num   { font-size: 22px; font-weight: 800; display: block; line-height: 1; }
     .ov-schema-stat-num.found { color: var(--green); }
     .ov-schema-stat-num.none  { color: var(--red); }
     .ov-schema-block { margin: 8px 12px; border-radius: 10px; overflow: hidden; border: 1.5px solid var(--border); background: var(--card); transition: background .25s, border-color .25s; }
     .ov-schema-block-head { display: flex; align-items: center; gap: 8px; padding: 9px 13px; background: var(--bg); border-bottom: 1px solid var(--border); justify-content: space-between; transition: background .25s, border-color .25s; }
     .ov-schema-block-left { display: flex; align-items: center; gap: 8px; }
-    .ov-schema-idx  { font-size: 9.5px; font-weight: 800; color: #fff; background: var(--blue); border-radius: 4px; padding: 1px 6px; flex-shrink: 0; }
-    .ov-schema-type { font-size: 12px; font-weight: 700; color: var(--t1); }
-    .ov-schema-type-tag { font-size: 9.5px; font-weight: 700; padding: 1px 7px; border-radius: 5px; background: var(--blue-lt); color: var(--blue); white-space: nowrap; }
+    .ov-schema-idx  { font-size: 10.5px; font-weight: 800; color: #fff; background: var(--blue); border-radius: 4px; padding: 1px 6px; flex-shrink: 0; }
+    .ov-schema-type { font-size: 13px; font-weight: 700; color: var(--t1); }
+    .ov-schema-type-tag { font-size: 10.5px; font-weight: 700; padding: 1px 7px; border-radius: 5px; background: var(--blue-lt); color: var(--blue); white-space: nowrap; }
     .ov-schema-type-tag.error { background: var(--red-lt); color: var(--red); }
     .ov-schema-export-btn {
       display: flex; align-items: center; gap: 4px;
       padding: 4px 10px; border-radius: 6px; background: var(--blue); color: #fff;
-      border: none; font-size: 10px; font-weight: 700; cursor: pointer;
+      border: none; font-size: 11px; font-weight: 700; cursor: pointer;
       font-family: inherit; transition: opacity .15s; white-space: nowrap;
     }
     .ov-schema-export-btn:hover { opacity: .85; }
     .ov-schema-code {
       font-family: 'Menlo','Consolas','Monaco',monospace;
-      font-size: 10.5px; line-height: 1.6; color: var(--t1);
+      font-size: 11.5px; line-height: 1.6; color: var(--t1);
       background: var(--code-bg); padding: 10px 13px;
       overflow-x: auto; white-space: pre; max-height: 220px; overflow-y: auto;
       transition: background .25s, color .25s;
@@ -214,22 +214,22 @@ const MAX_HISTORY = 10;
     .json-num  { color: var(--red); }
     .json-bool { color: var(--purple); font-weight: 700; }
     .json-null { color: var(--t4); font-weight: 700; }
-    .ov-schema-error { padding: 10px 13px; color: var(--red); font-size: 11px; font-family: 'Menlo','Consolas',monospace; background: var(--red-lt); }
+    .ov-schema-error { padding: 10px 13px; color: var(--red); font-size: 12px; font-family: 'Menlo','Consolas',monospace; background: var(--red-lt); }
     .ov-export-all-wrap { padding: 10px 12px 12px; display: flex; justify-content: flex-end; }
     .ov-export-all-btn {
       display: flex; align-items: center; gap: 6px;
       padding: 7px 16px; border-radius: 8px; background: var(--green); color: #fff;
-      border: none; font-size: 11px; font-weight: 700; cursor: pointer;
+      border: none; font-size: 12px; font-weight: 700; cursor: pointer;
       font-family: inherit; transition: opacity .15s;
     }
     .ov-export-all-btn:hover { opacity: .85; }
 
     /* ── Shared helpers ───────────────────────────────────────── */
-    .ov-truncate-note { text-align: center; padding: 8px 15px; font-size: 10.5px; color: var(--t4); background: var(--bg); border-top: 1px solid var(--border); }
+    .ov-truncate-note { text-align: center; padding: 8px 15px; font-size: 11.5px; color: var(--t4); background: var(--bg); border-top: 1px solid var(--border); }
     .ov-empty { display: flex; flex-direction: column; align-items: center; padding: 24px; gap: 6px; text-align: center; background: var(--bg); }
     .ov-empty-icon { font-size: 24px; }
-    .ov-empty-text { font-size: 12px; font-weight: 700; color: var(--t1); }
-    .ov-empty-sub  { font-size: 11px; color: var(--t4); }
+    .ov-empty-text { font-size: 13px; font-weight: 700; color: var(--t1); }
+    .ov-empty-sub  { font-size: 12px; color: var(--t4); }
 
     /* ── Copy button ──────────────────────────────────────────── */
     .ov-copy-btn {
@@ -248,7 +248,7 @@ const MAX_HISTORY = 10;
       width: 100%; padding: 10px 16px;
       background: var(--bg); border: none;
       border-top: 1px solid var(--border);
-      font-family: inherit; font-size: 11px; font-weight: 700;
+      font-family: inherit; font-size: 12px; font-weight: 700;
       color: var(--blue); cursor: pointer;
       transition: background .15s, color .15s;
       gap: 6px;
@@ -1071,12 +1071,18 @@ function renderOvSchema(OV) {
           <span class="ov-schema-type">${esc(hasError?'Parse Error':schema.type)}</span>
           <span class="ov-schema-type-tag ${hasError?'error':''}">${hasError?'⚠ Invalid JSON':'JSON-LD'}</span>
         </div>
-        ${!hasError ? `<button class="ov-schema-export-btn" data-schema-idx="${i}">
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-          </svg>
-          Export
-        </button>` : ''}
+        <div style="display:flex;align-items:center;gap:6px;">
+          ${!hasError ? `
+          <button class="ov-copy-btn" data-copy="${esc(pretty)}" title="Copy JSON" style="width:26px;height:26px;">
+            ${copyIconSVG()}
+          </button>
+          <button class="ov-schema-export-btn" data-schema-idx="${i}">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            Export
+          </button>` : ''}
+        </div>
       </div>
       ${hasError
         ? `<div class="ov-schema-error">⚠ Parse Error: ${esc(schema.error)}<br><br><code>${esc(schema.raw.slice(0,200))}${schema.raw.length>200?'…':''}</code></div>`
@@ -1102,6 +1108,12 @@ function renderOvSchema(OV) {
       if (!s?.parsed) return;
       downloadJSON(s.parsed, `schema-${s.type.replace(/[^a-z0-9]/gi,'-').toLowerCase()||'data'}-${s.index+1}.json`);
     });
+  });
+
+  // Copy buttons on schema blocks
+  el.addEventListener('click', e => {
+    const btn = e.target.closest('.ov-copy-btn[data-copy]');
+    if (btn) copyToClipboard(btn.dataset.copy, btn);
   });
   const expAll = el.querySelector('#exportAllSchemas');
   if (expAll) expAll.addEventListener('click', () => {
