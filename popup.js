@@ -1,4 +1,4 @@
-// popup.js — QC Auditor v2.0
+// popup.js — PagePulse v2.0
 // Dark Mode | Score History | Broken Images | SEO X-Ray
 'use strict';
 
@@ -50,6 +50,15 @@ let _schemaPretty = new Map();   // idx → pretty JSON string (avoids large dat
     .sev-medium { background: var(--orange-lt); color: var(--orange); }
     .sev-low    { background: var(--blue-lt);   color: var(--blue); }
     .sv-hint { font-size: 10.5px; color: var(--t4); margin-left: 3px; font-weight: 400; }
+    /* Full-text rows (title, description) in Overview tab */
+    .detail-row--full { align-items: flex-start; }
+    .full-text-val {
+      flex: 1; font-size: 11.5px; font-weight: 600; line-height: 1.5;
+      word-break: break-word; white-space: normal; text-align: left;
+      display: flex; flex-wrap: wrap; align-items: flex-start;
+      gap: 4px; max-width: none;
+    }
+    .full-text-val span:first-child { flex: 1; min-width: 0; }
 
     /* ══════════════════════════════════════════════════════════
        SEO X-RAY — Inner tabs
@@ -282,6 +291,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   await initHistory();
   setupTabs();
   setupOverviewTabs();
+  await restoreActiveTab();
+  await restoreActiveOvTab();
   document.getElementById('btnReanalyze').addEventListener('click', runAudit);
   document.getElementById('btnRetry').addEventListener('click', runAudit);
   runAudit();
@@ -435,8 +446,23 @@ function setupTabs() {
       document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
       btn.classList.add('active');
       document.getElementById(`panel-${tab}`).classList.add('active');
+      storageSet('activeTab', tab); // persist
     });
   });
+}
+
+async function restoreActiveTab() {
+  const { activeTab } = await storageGet('activeTab');
+  if (activeTab) {
+    const btn   = document.querySelector(`.tab-btn[data-tab="${activeTab}"]`);
+    const panel = document.getElementById(`panel-${activeTab}`);
+    if (btn && panel) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      panel.classList.add('active');
+    }
+  }
 }
 
 function setupOverviewTabs() {
@@ -447,8 +473,23 @@ function setupOverviewTabs() {
       document.querySelectorAll('.ov-panel').forEach(p => p.classList.remove('active'));
       btn.classList.add('active');
       document.getElementById(`ovpanel-${tab}`).classList.add('active');
+      storageSet('activeOvTab', tab); // persist
     });
   });
+}
+
+async function restoreActiveOvTab() {
+  const { activeOvTab } = await storageGet('activeOvTab');
+  if (activeOvTab) {
+    const btn   = document.querySelector(`.ov-tab-btn[data-ovtab="${activeOvTab}"]`);
+    const panel = document.getElementById(`ovpanel-${activeOvTab}`);
+    if (btn && panel) {
+      document.querySelectorAll('.ov-tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.ov-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      panel.classList.add('active');
+    }
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -495,10 +536,12 @@ async function runAudit() {
 
     renderResults(scores, resp.data);
     showState('results');
+    await restoreActiveTab();
+    await restoreActiveOvTab();
     requestAnimationFrame(() => setTimeout(() => animateScores(scores), 80));
 
   } catch (err) {
-    console.error('[QC Auditor]', err);
+    console.error('[PagePulse]', err);
     showError(err.message || 'An unexpected error occurred. Please try again.');
   }
 }
@@ -547,7 +590,9 @@ function calculateScores(data) {
 
   if (S.h1Count === 0)      fail('seo','SEO','high','No H1 heading found','Every page needs exactly one H1 containing your primary keyword.');
   else if (S.h1Count > 1)   fail('seo','SEO','medium',`${S.h1Count} H1 tags detected — should be exactly 1`,'Multiple H1s dilute keyword signals. Keep one H1; use H2–H6 for sub-sections.');
-  if (S.h2Count === 0 && S.h1Count > 0) fail('seo','SEO','low','No H2 headings found','H2 headings define page sections and help Google index sub-topics.');
+  if (S.h2Count === 0 && S.h1Count > 0)
+    fail('seo','SEO','low','No H2 headings found',
+      'For multi-section pages, H2 tags help Google index sub-topics and improve scannability. If this is a short single-topic page (landing page, 404, login), this is not an issue. For content-heavy pages, add H2s to divide content into logical sections.');
   if (!S.headingHierarchyOk) fail('seo','SEO','medium','Broken heading hierarchy (levels skipped)','Heading levels must not skip (e.g., H1 → H3 without H2). Fix heading nesting: H1 → H2 → H3 → H4.');
 
   const hasOGFull = S.ogTitle && S.ogDescription && S.ogImage;
@@ -596,7 +641,10 @@ function calculateScores(data) {
   const brokenCount = OV?.imagesBroken || 0;
   if (brokenCount > 0) fail('a11y','Accessibility','high',`${brokenCount} broken image(s) detected (404 / failed to load)`,'These images return errors and render as empty boxes. Fix or remove the broken src URLs. Broken images hurt user experience and can affect SEO image indexing.');
 
-  if (A.hasForms && A.inputsWithoutLabels > 0) fail('a11y','Accessibility','high',`${A.inputsWithoutLabels} form input(s) without proper labels`,'Unlabeled inputs are announced as "edit text" with zero context. Fix: <label for="inputId">, aria-label, or wrap in <label>. Violates WCAG 1.3.1.');
+  if (A.hasForms && A.inputsWithoutLabels > 0)
+    fail('a11y','Accessibility','high',
+      `${A.inputsWithoutLabels} form input(s) missing accessible labels`,
+      `These inputs have no programmatic label — placeholder text does NOT count. Placeholders disappear on typing, have insufficient color contrast, and are not reliably announced by screen readers. Fix options: (1) <label for="inputId">, (2) aria-label="Email address" on the input, (3) wrap the input inside <label>. Violates WCAG 1.3.1 and 4.1.2.`);
   if (A.buttonsWithoutText > 0) fail('a11y','Accessibility','high',`${A.buttonsWithoutText} button(s) without accessible text`,'Icon-only buttons are announced as "button" with no context. Add aria-label="Close dialog". Violates WCAG 4.1.2.');
   if (A.linksWithoutText > 0)   fail('a11y','Accessibility','medium',`${A.linksWithoutText} link(s) without accessible text`,'Links with no text or aria-label are announced as the raw URL. Add descriptive text or aria-label.');
   if (!A.hasSkipNav)             fail('a11y','Accessibility','medium','No skip navigation link','Add <a href="#main-content">Skip to main content</a> as the first element. Required by WCAG 2.4.1.');
@@ -644,7 +692,7 @@ function generateSuggestions(data, scores) {
   if (P.renderBlockingScripts > 0) add('high','Performance','Eliminate All Render-Blocking Scripts',`${P.renderBlockingScripts} script(s) block page render. Add defer to DOM-dependent scripts; async to independent ones. One eliminated blocking script can improve FCP by 300–800ms.`,'High');
   if (P.totalImages >= 3 && (P.lazyImages / P.totalImages) < 0.5) add('high','Performance','Implement Lazy Loading + Modern Image Formats',`Add loading="lazy" to ${P.totalImages - P.lazyImages} non-hero images. Convert to WebP (25–34% smaller) or AVIF (50% smaller). Use <picture> with srcset for responsive images.`,'High');
   if ((OV?.imagesBroken || 0) > 0) add('high','Accessibility','Fix Broken Images',`${OV.imagesBroken} image(s) fail to load. Open the SEO X-Ray → Images tab to see which files are broken. Update the src URLs or remove the broken <img> tags entirely.`,'High');
-  if (A.hasForms && A.inputsWithoutLabels > 0) add('high','Accessibility','Fix Form Accessibility',`${A.inputsWithoutLabels} inputs have no programmatic labels — a critical WCAG failure. Three valid approaches: <label for="inputId">, aria-label="Email", or wrap input inside <label>.`,'High');
+  if (A.hasForms && A.inputsWithoutLabels > 0) add('high','Accessibility','Fix Form Inputs — Add Proper Labels',`${A.inputsWithoutLabels} input(s) have no programmatic label. Placeholder text does NOT count — it disappears on typing and screen readers do not reliably announce it. Fix: (1) <label for="inputId">, (2) aria-label="Email address", (3) wrap input inside <label>. Placeholder can remain as a hint alongside the label.`,'High');
   if (!B.isHttps) add('high','Security','Migrate to HTTPS Immediately','Use Let\'s Encrypt (free) via Certbot. After installing: update all URLs to HTTPS, add 301 redirects, add HSTS header.','High');
   if (!A.hasSkipNav) add('medium','Accessibility','Add Skip Navigation Link','Add <a href="#main-content" class="skip-link">Skip to main content</a> as the first element in <body>. Required for WCAG 2.4.1 (Level A).','Medium');
   if (B.externalLinksUnsafe > 0) add('medium','Security','Secure All External Links',`${B.externalLinksUnsafe} external link(s) are vulnerable. Add rel="noopener noreferrer" to every external link.`,'Medium');
@@ -727,12 +775,14 @@ function emptyState(icon, title, sub) {
   return `<div class="empty-state"><div class="empty-icon">${icon}</div><div class="empty-title">${esc(title)}</div><div class="empty-sub">${esc(sub)}</div></div>`;
 }
 
-// ── Details Tab ───────────────────────────────────────────────────────────────
+// ── Overview Tab (formerly Details) ───────────────────────────────────────────
 function renderDetails(data, scores) {
   const S = data.seo, P = data.performance,
         A = data.accessibility, B = data.bestPractices,
         OV = data.overview;
-  const el  = document.getElementById('detailsContent');
+  const el = document.getElementById('detailsContent');
+
+  // Section builder — standard rows
   const sec = (icon, label, scoreVal, rows) => `
     <div class="details-section">
       <div class="details-head">
@@ -740,9 +790,56 @@ function renderDetails(data, scores) {
         <span class="details-head-label">${label}</span>
         <span class="details-head-score" style="color:${scoreColor(scoreVal,25)}">${scoreVal}/25</span>
       </div>
-      ${rows.map(([k,v,c]) => `<div class="detail-row"><span class="detail-key">${esc(k)}</span><span class="detail-val val-${c}">${v}</span></div>`).join('')}
+      ${rows.map(([k,v,c]) =>
+        `<div class="detail-row"><span class="detail-key">${esc(k)}</span><span class="detail-val val-${c}">${v}</span></div>`
+      ).join('')}
     </div>`;
 
+  // Full-text row — wraps text, no truncation, with copy button
+  const fullRow = (icon, label, scoreVal, extraRows) => {
+    const titleCls = S.title ? (S.titleLength>=30&&S.titleLength<=60?'pass':'warn') : 'fail';
+    const descCls  = S.metaDescription ? (S.metaDescriptionLength>=140&&S.metaDescriptionLength<=160?'pass':'warn') : 'fail';
+
+    const titleHTML = S.title
+      ? `<div class="full-text-val val-${titleCls}">
+           <span>${esc(S.title)}</span>
+           <span class="sv-hint">(${S.titleLength} chars)</span>
+           <button class="ov-copy-btn" data-copy="${esc(S.title)}" title="Copy title">${copyIconSVG()}</button>
+         </div>`
+      : `<div class="full-text-val val-fail" style="font-style:italic;">✗ Missing</div>`;
+
+    const descHTML = S.metaDescription
+      ? `<div class="full-text-val val-${descCls}">
+           <span>${esc(S.metaDescription)}</span>
+           <span class="sv-hint">(${S.metaDescriptionLength} chars)</span>
+           <button class="ov-copy-btn" data-copy="${esc(S.metaDescription)}" title="Copy description">${copyIconSVG()}</button>
+         </div>`
+      : `<div class="full-text-val val-fail" style="font-style:italic;">✗ Missing</div>`;
+
+    const stdRows = extraRows.map(([k,v,c]) =>
+      `<div class="detail-row"><span class="detail-key">${esc(k)}</span><span class="detail-val val-${c}">${v}</span></div>`
+    ).join('');
+
+    return `
+      <div class="details-section">
+        <div class="details-head">
+          <span class="details-head-icon">${icon}</span>
+          <span class="details-head-label">${label}</span>
+          <span class="details-head-score" style="color:${scoreColor(scoreVal,25)}">${scoreVal}/25</span>
+        </div>
+        <div class="detail-row detail-row--full">
+          <span class="detail-key">Title</span>
+          ${titleHTML}
+        </div>
+        <div class="detail-row detail-row--full">
+          <span class="detail-key">Description</span>
+          ${descHTML}
+        </div>
+        ${stdRows}
+      </div>`;
+  };
+
+  // Performance helpers
   const ltCls   = P.loadTime<=0?'neu':P.loadTime<2500?'pass':P.loadTime<4000?'warn':'fail';
   const ltLabel = P.loadTime<=0?'N/A':P.loadTime<1500?`${(P.loadTime/1000).toFixed(2)}s — Fast ✓`:P.loadTime<2500?`${(P.loadTime/1000).toFixed(2)}s — OK`:P.loadTime<4000?`${(P.loadTime/1000).toFixed(2)}s — Slow ⚠`:`${(P.loadTime/1000).toFixed(2)}s — Critical ✗`;
   const ttfbCls = P.ttfb<=0?'neu':P.ttfb<800?'pass':P.ttfb<1800?'warn':'fail';
@@ -753,51 +850,54 @@ function renderDetails(data, scores) {
   const brokenCount = OV?.imagesBroken || 0;
 
   el.innerHTML =
-    sec('🔍','SEO',scores.seoScore,[
-      ['Page Title', S.title?`"${S.title.slice(0,26)}${S.title.length>26?'…':''}"`:' ✗ Missing', S.title?(S.titleLength>=30&&S.titleLength<=60?'pass':'warn'):'fail'],
-      ['Title Length', S.titleLength?`${S.titleLength} chars ${S.titleLength>=50&&S.titleLength<=60?'✓':'⚠ (50–60 ideal)'}`:'N/A', S.titleLength>=50&&S.titleLength<=60?'pass':S.titleLength>=30?'warn':'fail'],
-      ['Meta Description', S.metaDescription?`${S.metaDescriptionLength} chars ${S.metaDescriptionLength>=140&&S.metaDescriptionLength<=160?'✓':'⚠'}`:'✗ Missing', S.metaDescriptionLength>=140&&S.metaDescriptionLength<=160?'pass':S.metaDescriptionLength>0?'warn':'fail'],
-      ['H1 / H2 / H3', `${S.h1Count} / ${S.h2Count} / ${S.h3Count}`, S.h1Count===1?'pass':S.h1Count===0?'fail':'warn'],
-      ['Heading Hierarchy', S.headingHierarchyOk?'✓ Correct':'✗ Broken', S.headingHierarchyOk?'pass':'fail'],
-      ['Open Graph', (S.ogTitle&&S.ogDescription&&S.ogImage)?'✓ Complete':(S.ogTitle||S.ogDescription)?'⚠ Partial':'✗ Missing', (S.ogTitle&&S.ogDescription&&S.ogImage)?'pass':(S.ogTitle||S.ogDescription)?'warn':'fail'],
-      ['Canonical Tag', S.canonical?'✓ Present':'⚠ Missing', S.canonical?'pass':'warn'],
-      ['JSON-LD / Schema', S.jsonLD?'✓ Found':'⚠ Not found', S.jsonLD?'pass':'warn'],
-      ['Internal / External', `${S.internalLinks} / ${S.externalLinks}`, 'neu'],
-      ['Vague Link Text', `${S.nonDescriptiveLinks} ${S.nonDescriptiveLinks===0?'✓':'⚠'}`, S.nonDescriptiveLinks===0?'pass':'warn'],
+    fullRow('🔍','SEO', scores.seoScore, [
+      ['H1 / H2 / H3',      `${S.h1Count} / ${S.h2Count} / ${S.h3Count}`,                                   S.h1Count===1?'pass':S.h1Count===0?'fail':'warn'],
+      ['Heading Hierarchy',  S.headingHierarchyOk?'✓ Correct':'✗ Broken',                                    S.headingHierarchyOk?'pass':'fail'],
+      ['Open Graph',         (S.ogTitle&&S.ogDescription&&S.ogImage)?'✓ Complete':(S.ogTitle||S.ogDescription)?'⚠ Partial':'✗ Missing', (S.ogTitle&&S.ogDescription&&S.ogImage)?'pass':(S.ogTitle||S.ogDescription)?'warn':'fail'],
+      ['Canonical Tag',      S.canonical?'✓ Present':'⚠ Missing',                                            S.canonical?'pass':'warn'],
+      ['JSON-LD / Schema',   S.jsonLD?'✓ Found':'⚠ Not found',                                               S.jsonLD?'pass':'warn'],
+      ['Internal / External',`${S.internalLinks} / ${S.externalLinks}`,                                      'neu'],
+      ['Vague Link Text',    `${S.nonDescriptiveLinks} ${S.nonDescriptiveLinks===0?'✓':'⚠'}`,                S.nonDescriptiveLinks===0?'pass':'warn'],
     ]) +
-    sec('⚡','Performance (Desktop)',scores.perfScore,[
-      ['Page Load Time', ltLabel, ltCls],
-      ['TTFB', ttfbLbl, ttfbCls],
-      ['DOM Content Loaded', P.domContentLoaded>0?`${(P.domContentLoaded/1000).toFixed(2)}s`:'N/A', 'neu'],
-      ['DOM Size', domLbl, domCls],
-      ['External Scripts', `${P.scriptsCount} ${P.scriptsCount<=10?'✓':P.scriptsCount<=20?'⚠ Many':'✗ Too many'}`, P.scriptsCount<=10?'pass':P.scriptsCount<=20?'warn':'fail'],
-      ['Render-Blocking', `${P.renderBlockingScripts} ${P.renderBlockingScripts===0?'✓':'✗'}`, P.renderBlockingScripts===0?'pass':'fail'],
-      ['Lazy Images', `${P.lazyImages} / ${P.totalImages} ${P.totalImages>0&&P.lazyImages/P.totalImages>=0.7?'✓':'⚠'}`, P.totalImages===0||P.lazyImages/P.totalImages>=0.7?'pass':'warn'],
-      ['Large Images >200KB', `${P.largeImagesCount} ${P.largeImagesCount===0?'✓':'⚠'}`, P.largeImagesCount===0?'pass':'warn'],
-      ['WebP / Next-Gen', P.hasWebP?'✓ Detected':'⚠ None found', P.hasWebP?'pass':'warn'],
+    sec('⚡','Performance (Desktop)', scores.perfScore, [
+      ['Page Load Time',     ltLabel,                                                                          ltCls],
+      ['TTFB',               ttfbLbl,                                                                          ttfbCls],
+      ['DOM Content Loaded', P.domContentLoaded>0?`${(P.domContentLoaded/1000).toFixed(2)}s`:'N/A',          'neu'],
+      ['DOM Size',           domLbl,                                                                           domCls],
+      ['External Scripts',   `${P.scriptsCount} ${P.scriptsCount<=10?'✓':P.scriptsCount<=20?'⚠ Many':'✗ Too many'}`, P.scriptsCount<=10?'pass':P.scriptsCount<=20?'warn':'fail'],
+      ['Render-Blocking',    `${P.renderBlockingScripts} ${P.renderBlockingScripts===0?'✓':'✗'}`,             P.renderBlockingScripts===0?'pass':'fail'],
+      ['Lazy Images',        `${P.lazyImages} / ${P.totalImages} ${P.totalImages>0&&P.lazyImages/P.totalImages>=0.7?'✓':'⚠'}`, P.totalImages===0||P.lazyImages/P.totalImages>=0.7?'pass':'warn'],
+      ['Large Images >200KB',`${P.largeImagesCount} ${P.largeImagesCount===0?'✓':'⚠'}`,                      P.largeImagesCount===0?'pass':'warn'],
+      ['WebP / Next-Gen',    P.hasWebP?'✓ Detected':'⚠ None found',                                          P.hasWebP?'pass':'warn'],
     ]) +
-    sec('♿','Accessibility',scores.a11yScore,[
-      ['Language (lang="")', A.langAttribute?`✓ "${A.langAttribute}"`:' ✗ Missing', A.langAttribute?'pass':'fail'],
-      ['Images Without Alt', A.totalImages>0?`${A.imagesWithoutAlt} of ${A.totalImages}`:'N/A', A.imagesWithoutAlt===0?'pass':'fail'],
-      ['Broken Images', `${brokenCount} ${brokenCount===0?'✓':'✗ Broken'}`, brokenCount===0?'pass':'fail'],
-      ['Poor Alt Text', `${A.poorAltCount} ${A.poorAltCount===0?'✓':'⚠'}`, A.poorAltCount===0?'pass':'warn'],
-      ['Form Inputs', A.hasForms?`${A.inputsWithoutLabels} unlabeled`:'No forms ✓', (!A.hasForms||A.inputsWithoutLabels===0)?'pass':'fail'],
-      ['Buttons Without Text', `${A.buttonsWithoutText} ${A.buttonsWithoutText===0?'✓':'✗'}`, A.buttonsWithoutText===0?'pass':'fail'],
-      ['Skip Navigation', A.hasSkipNav?'✓ Found':'⚠ Missing', A.hasSkipNav?'pass':'warn'],
-      ['ARIA Landmarks', `${A.ariaLandmarks} ${A.ariaLandmarks>=3?'✓':A.ariaLandmarks>0?'⚠':'✗'}`, A.ariaLandmarks>=3?'pass':A.ariaLandmarks>0?'warn':'fail'],
-      ['Focus Visibility', (A.focusCssKilled||A.focusKilledInline>0)?'✗ Suppressed':'✓ OK', (A.focusCssKilled||A.focusKilledInline>0)?'fail':'pass'],
+    sec('♿','Accessibility', scores.a11yScore, [
+      ['Language (lang="")', A.langAttribute?`✓ "${A.langAttribute}"`:' ✗ Missing',                          A.langAttribute?'pass':'fail'],
+      ['Images Without Alt', A.totalImages>0?`${A.imagesWithoutAlt} of ${A.totalImages}`:'N/A',              A.imagesWithoutAlt===0?'pass':'fail'],
+      ['Broken Images',      `${brokenCount} ${brokenCount===0?'✓':'✗ Broken'}`,                             brokenCount===0?'pass':'fail'],
+      ['Poor Alt Text',      `${A.poorAltCount} ${A.poorAltCount===0?'✓':'⚠'}`,                              A.poorAltCount===0?'pass':'warn'],
+      ['Form Inputs',        A.hasForms?`${A.inputsWithoutLabels} unlabeled`:'No forms ✓',                   (!A.hasForms||A.inputsWithoutLabels===0)?'pass':'fail'],
+      ['Buttons Without Text',`${A.buttonsWithoutText} ${A.buttonsWithoutText===0?'✓':'✗'}`,                 A.buttonsWithoutText===0?'pass':'fail'],
+      ['Skip Navigation',    A.hasSkipNav?'✓ Found':'⚠ Missing',                                              A.hasSkipNav?'pass':'warn'],
+      ['ARIA Landmarks',     `${A.ariaLandmarks} ${A.ariaLandmarks>=3?'✓':A.ariaLandmarks>0?'⚠':'✗'}`,     A.ariaLandmarks>=3?'pass':A.ariaLandmarks>0?'warn':'fail'],
+      ['Focus Visibility',   (A.focusCssKilled||A.focusKilledInline>0)?'✗ Suppressed':'✓ OK',                (A.focusCssKilled||A.focusKilledInline>0)?'fail':'pass'],
     ]) +
-    sec('🛡️','Best Practices',scores.bpScore,[
-      ['HTTPS', B.isHttps?'✓ Secure':'✗ Insecure', B.isHttps?'pass':'fail'],
-      ['Mixed Content', B.mixedContent?'✗ Detected':'✓ Clean', B.mixedContent?'fail':'pass'],
-      ['Viewport Meta', B.hasViewportMeta?'✓ Present':'✗ Missing', B.hasViewportMeta?'pass':'fail'],
-      ['DOCTYPE', B.doctypePresent?'✓ HTML5':'✗ Missing', B.doctypePresent?'pass':'fail'],
-      ['Charset Meta', B.charsetMeta?'✓ UTF-8':'⚠ Missing', B.charsetMeta?'pass':'warn'],
-      ['Semantic HTML', `${B.semanticTagsCount} type(s) ${B.hasSemanticHTML?'✓':'⚠'}`, B.hasSemanticHTML?'pass':'warn'],
-      ['Deprecated Tags', B.deprecatedTags.length===0?'✓ None':B.deprecatedTags.slice(0,3).join(', '), B.deprecatedTags.length===0?'pass':'warn'],
-      ['Unsafe Ext. Links', `${B.externalLinksUnsafe} ${B.externalLinksUnsafe===0?'✓':'⚠'}`, B.externalLinksUnsafe===0?'pass':'warn'],
-      ['Inline Event Handlers', `${B.inlineEventHandlers} ${B.inlineEventHandlers===0?'✓':'⚠'}`, B.inlineEventHandlers===0?'pass':'warn'],
+    sec('🛡️','Best Practices', scores.bpScore, [
+      ['HTTPS',              B.isHttps?'✓ Secure':'✗ Insecure',                                              B.isHttps?'pass':'fail'],
+      ['Mixed Content',      B.mixedContent?'✗ Detected':'✓ Clean',                                          B.mixedContent?'fail':'pass'],
+      ['Viewport Meta',      B.hasViewportMeta?'✓ Present':'✗ Missing',                                      B.hasViewportMeta?'pass':'fail'],
+      ['DOCTYPE',            B.doctypePresent?'✓ HTML5':'✗ Missing',                                         B.doctypePresent?'pass':'fail'],
+      ['Charset Meta',       B.charsetMeta?'✓ UTF-8':'⚠ Missing',                                            B.charsetMeta?'pass':'warn'],
+      ['Semantic HTML',      `${B.semanticTagsCount} type(s) ${B.hasSemanticHTML?'✓':'⚠'}`,                 B.hasSemanticHTML?'pass':'warn'],
+      ['Deprecated Tags',    B.deprecatedTags.length===0?'✓ None':B.deprecatedTags.slice(0,3).join(', '),   B.deprecatedTags.length===0?'pass':'warn'],
+      ['Unsafe Ext. Links',  `${B.externalLinksUnsafe} ${B.externalLinksUnsafe===0?'✓':'⚠'}`,               B.externalLinksUnsafe===0?'pass':'warn'],
+      ['Inline Event Handlers',`${B.inlineEventHandlers} ${B.inlineEventHandlers===0?'✓':'⚠'}`,             B.inlineEventHandlers===0?'pass':'warn'],
     ]);
+
+  // Wire copy buttons via delegation
+  el.addEventListener('click', e => {
+    const btn = e.target.closest('.ov-copy-btn[data-copy]');
+    if (btn) copyToClipboard(btn.dataset.copy, btn);
+  });
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -817,8 +917,14 @@ function renderOvSummary(S, OV) {
   const el  = document.getElementById('ovSummaryContent');
   const row = (key, val, cls='') => `<div class="ov-meta-row"><span class="ov-meta-key">${key}</span><span class="ov-meta-val ${cls}">${val}</span></div>`;
 
-  const titleVal = S.title ? `${esc(S.title.slice(0,80))} <span style="color:var(--t4);font-size:10px;font-weight:400;">(${S.titleLength} chars)</span>` : 'Missing title tag!';
-  const descVal  = S.metaDescription ? `${esc(S.metaDescription.slice(0,120))}${S.metaDescription.length>120?'…':''} <span style="color:var(--t4);font-size:10px;font-weight:400;">(${S.metaDescriptionLength} chars)</span>` : 'Description is missing!';
+  const titleVal = S.title
+    ? `${esc(S.title)} <span style="color:var(--t4);font-size:10px;font-weight:400;">(${S.titleLength} chars)</span>
+       <button class="ov-copy-btn" data-copy="${esc(S.title)}" title="Copy title" style="vertical-align:middle;margin-left:4px;">${copyIconSVG()}</button>`
+    : 'Missing title tag!';
+  const descVal  = S.metaDescription
+    ? `${esc(S.metaDescription)} <span style="color:var(--t4);font-size:10px;font-weight:400;">(${S.metaDescriptionLength} chars)</span>
+       <button class="ov-copy-btn" data-copy="${esc(S.metaDescription)}" title="Copy description" style="vertical-align:middle;margin-left:4px;">${copyIconSVG()}</button>`
+    : 'Description is missing!';
   const totalLinks = OV.totalLinks || (S.internalLinks + S.externalLinks + S.emptyLinks);
 
   const statCell = (label, num, cls='') => `<div class="ov-stat-cell"><span class="ov-stat-label">${label}</span><span class="ov-stat-num ${num===0?'zero':''} ${cls}">${num}</span></div>`;
@@ -842,6 +948,12 @@ function renderOvSummary(S, OV) {
       ${statCell('Images', OV.imagesTotal)}
       ${statCell('Links', totalLinks)}
     </div>`;
+
+  // Wire copy buttons via delegation
+  el.addEventListener('click', e => {
+    const btn = e.target.closest('.ov-copy-btn[data-copy]');
+    if (btn) copyToClipboard(btn.dataset.copy, btn);
+  });
 }
 
 // ── Headers Tree ──────────────────────────────────────────────────────────────
