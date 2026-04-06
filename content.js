@@ -32,7 +32,7 @@ if (!window.__qcAuditorLoaded) {
 
       if (charset || httpEquiv === 'content-type') data.bestPractices.charsetMeta = true;
       if (name === 'description') seo.metaDescription = content;
-      if (name === 'keywords')    data.overview.keywords = content;
+      if (name === 'keywords')    data.overview.metaKeywords = content;
       if (name === 'robots')      data.overview.robots   = content;
       if (name === 'viewport') {
         seo.metaViewport = content;
@@ -270,9 +270,9 @@ if (!window.__qcAuditorLoaded) {
     //  OVERVIEW  (Summary, Headers, Images with Broken, Links, Schema)
     // ══════════════════════════════════════════════════════════════════
     const ov = data.overview;
-    ov.keywords = ov.keywords || '';
-    ov.robots   = ov.robots   || '';
-    ov.lang     = a11y.langAttribute || '';
+    ov.metaKeywords = ov.metaKeywords || '';
+    ov.robots       = ov.robots   || '';
+    ov.lang         = a11y.langAttribute || '';
 
     // Heading tree
     ov.headingsTree = [...document.querySelectorAll('h1,h2,h3,h4,h5,h6')].map(h => ({
@@ -296,13 +296,29 @@ if (!window.__qcAuditorLoaded) {
       const hasTitle = titleAttr.trim().length > 0;
       const poorAlt  = hasAlt && POOR_ALTS_SET.has((altAttr || '').toLowerCase().trim());
 
-      // Broken image detection: loaded but rendered as 0×0 (404 / bad src)
+      // Format detection from src
+      const cleanSrc = rawSrc.split('?')[0].toLowerCase();
+      let format = 'OTHER';
+      if      (cleanSrc.endsWith('.webp'))         format = 'WEBP';
+      else if (cleanSrc.endsWith('.svg'))           format = 'SVG';
+      else if (cleanSrc.endsWith('.avif'))          format = 'AVIF';
+      else if (cleanSrc.endsWith('.png'))           format = 'PNG';
+      else if (cleanSrc.endsWith('.jpg') || cleanSrc.endsWith('.jpeg')) format = 'JPG';
+      else if (cleanSrc.endsWith('.gif'))           format = 'GIF';
+      else if (cleanSrc.endsWith('.bmp'))           format = 'BMP';
+      else if (cleanSrc.startsWith('data:image/webp'))  format = 'WEBP';
+      else if (cleanSrc.startsWith('data:image/svg'))   format = 'SVG';
+      else if (cleanSrc.startsWith('data:image/avif'))  format = 'AVIF';
+      else if (cleanSrc.startsWith('data:image/png'))   format = 'PNG';
+      else if (cleanSrc.startsWith('data:image/jpeg'))  format = 'JPG';
+
+      // Broken image detection
       const isBroken = img.complete && img.naturalWidth === 0 && rawSrc.length > 0;
 
       return {
         src, filename: filename.slice(0, 80),
         alt: altAttr, title: titleAttr || '',
-        hasAlt, hasTitle, poorAlt,
+        hasAlt, hasTitle, poorAlt, format,
         complete: hasAlt && hasTitle && !isBroken,
         broken: isBroken,
         width:  img.naturalWidth  || img.getAttribute('width')  || 0,
@@ -313,7 +329,12 @@ if (!window.__qcAuditorLoaded) {
     ov.imagesTotal        = ov.imagesList.length;
     ov.imagesWithoutAlt   = ov.imagesList.filter(i => !i.hasAlt).length;
     ov.imagesWithoutTitle = ov.imagesList.filter(i => !i.hasTitle).length;
-    ov.imagesBroken       = ov.imagesList.filter(i => i.broken).length;   // ← NEW
+    ov.imagesBroken       = ov.imagesList.filter(i => i.broken).length;
+
+    // Image format breakdown
+    const fmtCount = {};
+    ov.imagesList.forEach(img => { fmtCount[img.format] = (fmtCount[img.format] || 0) + 1; });
+    ov.imageFormats = fmtCount;
 
     // ── Links list ────────────────────────────────────────────────
     const linksMap = new Map();
@@ -342,6 +363,190 @@ if (!window.__qcAuditorLoaded) {
     ov.uniqueLinks         = linksMap.size;
     ov.internalUniqueLinks = [...linksMap.values()].filter(l => l.isInternal).length;
     ov.linksWithoutTitle   = [...linksMap.values()].filter(l => !l.title).length;
+
+    // ── Keywords extraction ────────────────────────────────────────
+    const STOP_WORDS = new Set([
+      'the','a','an','and','or','but','in','on','at','to','for','of','with','by',
+      'from','is','was','are','were','be','been','being','have','has','had','do',
+      'does','did','will','would','could','should','may','might','must','can',
+      'this','that','these','those','i','we','you','he','she','it','they','me',
+      'us','him','her','them','my','our','your','his','its','their','what','which',
+      'who','when','where','why','how','all','each','every','both','few','more',
+      'most','some','such','no','not','only','same','so','than','too','very',
+      'just','as','if','then','because','while','after','before','since','until',
+      'into','through','over','any','also','about','up','out','there','here',
+      'get','got','use','using','used','new','one','two','three','www','com',
+      'http','https','nbsp','amp','quot','lt','gt','amp','copy','reg'
+    ]);
+
+    const kwMap    = new Map(); // word → {count, bold, italic}
+    let totalWords = 0;
+
+    // Collect prominence signals
+    const titleWords    = new Set((document.title || '').toLowerCase().match(/[a-z]{3,}/g) || []);
+    const h1Words       = new Set([...document.querySelectorAll('h1')].join(' ').toLowerCase().match(/[a-z]{3,}/g) || []);
+    const h2Words       = new Set([...document.querySelectorAll('h2')].map(h => h.textContent).join(' ').toLowerCase().match(/[a-z]{3,}/g) || []);
+    const metaDescWords = new Set((document.querySelector('meta[name="description"]')?.getAttribute('content') || '').toLowerCase().match(/[a-z]{3,}/g) || []);
+
+    // Walk visible text nodes
+    const walker = document.createTreeWalker(
+      document.body,
+      NodeFilter.SHOW_TEXT,
+      {
+        acceptNode(node) {
+          const tag = node.parentElement?.tagName?.toLowerCase() || '';
+          if (['script','style','noscript','code','pre'].includes(tag)) return NodeFilter.FILTER_REJECT;
+          const style = node.parentElement ? window.getComputedStyle(node.parentElement) : null;
+          if (style && style.display === 'none') return NodeFilter.FILTER_REJECT;
+          if (style && style.visibility === 'hidden') return NodeFilter.FILTER_REJECT;
+          return NodeFilter.FILTER_ACCEPT;
+        }
+      }
+    );
+
+    let node;
+    while ((node = walker.nextNode())) {
+      const words = (node.textContent || '').toLowerCase().match(/[a-z]{3,}/g) || [];
+      if (!words.length) continue;
+      totalWords += words.length;
+
+      // Check if this text node is inside bold / italic
+      let el = node.parentElement;
+      let isBold   = false;
+      let isItalic = false;
+      while (el && el !== document.body) {
+        const tag = el.tagName?.toLowerCase();
+        if (tag === 'strong' || tag === 'b') isBold = true;
+        if (tag === 'em' || tag === 'i')     isItalic = true;
+        el = el.parentElement;
+      }
+
+      words.forEach(word => {
+        if (STOP_WORDS.has(word) || word.length < 3) return;
+        if (!kwMap.has(word)) kwMap.set(word, { count: 0, bold: false, italic: false });
+        const kw = kwMap.get(word);
+        kw.count++;
+        if (isBold)   kw.bold   = true;
+        if (isItalic) kw.italic = true;
+      });
+    }
+
+    // Build keyword list with prominence
+    ov.keywords = [...kwMap.entries()]
+      .filter(([, v]) => v.count >= 2)
+      .map(([word, v]) => {
+        let prominence = 0;
+        if (titleWords.has(word))    prominence += 5;
+        if (h1Words.has(word))       prominence += 4;
+        if (h2Words.has(word))       prominence += 3;
+        if (metaDescWords.has(word)) prominence += 2;
+        return {
+          word,
+          count:      v.count,
+          density:    totalWords > 0 ? +((v.count / totalWords) * 100).toFixed(2) : 0,
+          bold:       v.bold,
+          italic:     v.italic,
+          prominence
+        };
+      })
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 200);
+
+    ov.totalWordCount = totalWords;
+
+    // ── Technology Detection — extract actual IDs/values ─────────
+    const scripts    = [...document.querySelectorAll('script[src]')].map(s => s.src || '');
+    const allSrcText = scripts.join(' ');
+    const inlineText = [...document.querySelectorAll('script:not([src])')].map(s => s.textContent || '').join(' ');
+    const fullText   = allSrcText + ' ' + inlineText;
+
+    // Helper: extract first regex match from all script content
+    const extract = (regex) => { const m = fullText.match(regex); return m ? m[1] || m[0] : null; };
+    const hasSrc  = (str) => scripts.some(s => s.includes(str));
+    const hasGlobal = (g) => { try { return typeof eval(`window.${g}`) !== 'undefined'; } catch(e) { return false; } };
+
+    // GTM — extract container ID (GTM-XXXXX)
+    const gtmId = extract(/GTM-[A-Z0-9]+/) ||
+                  (hasSrc('googletagmanager.com/gtm') ? 'Detected' : null) ||
+                  (hasGlobal('google_tag_manager') ? Object.keys(window.google_tag_manager||{}).find(k=>k.startsWith('GTM-')) || 'Detected' : null);
+
+    // GA4 — extract measurement ID (G-XXXXXXX)
+    const ga4Id = extract(/['"](G-[A-Z0-9]+)['"]/) ||
+                  (hasSrc('googletagmanager.com/gtag') ? extract(/G-[A-Z0-9]+/) : null);
+
+    // Universal Analytics — extract UA-XXXXX-X
+    const uaId = extract(/['"](UA-\d+-\d+)['"]/);
+
+    // Google Analytics 4 via analytics.js
+    const ga4OrUa = ga4Id || uaId || (hasSrc('google-analytics.com') ? 'Detected' : null);
+
+    // Clarity — extract project ID
+    const clarityId = extract(/clarity\s*\(\s*['"]init['"]\s*,\s*['"]([^'"]+)['"]/) ||
+                      extract(/clarity\.ms\/tag\/([A-Za-z0-9]+)/) ||
+                      (hasSrc('clarity.ms') || hasGlobal('clarity') ? 'Detected' : null);
+
+    // Hotjar — extract site ID (hjid)
+    const hotjarId = extract(/hjid['":\s]+(\d{5,})/) ||
+                     extract(/hotjar\.com\/c\/(\d+)/) ||
+                     (hasSrc('static.hotjar.com') || hasGlobal('hj') ? 'Detected' : null);
+
+    // Google Ads — extract conversion ID (AW-XXXXXXXXX)
+    const gadsId = extract(/['"](AW-\d+)['"]/) ||
+                   (hasSrc('googleadservices.com') || hasSrc('googlesyndication.com') ? 'Detected' : null);
+
+    // Meta Pixel — extract pixel ID
+    const metaId = extract(/fbq\s*\(\s*['"]init['"]\s*,\s*['"](\d{10,})['"]/) ||
+                   (hasSrc('connect.facebook.net') || hasGlobal('fbq') ? 'Detected' : null);
+
+    // TikTok Pixel — extract pixel ID
+    const tiktokId = extract(/ttq\.load\s*\(\s*['"]([A-Z0-9]{15,})['"]/) ||
+                     (hasSrc('analytics.tiktok.com') || hasGlobal('ttq') ? 'Detected' : null);
+
+    // LinkedIn Insight
+    const linkedinId = extract(/_linkedin_partner_id\s*=\s*['"](\d+)['"]/) ||
+                       (hasSrc('snap.licdn.com') ? 'Detected' : null);
+
+    // WordPress — extract version
+    const wpMeta = document.querySelector('meta[name="generator"][content*="WordPress"]');
+    const wpVer  = wpMeta ? (wpMeta.getAttribute('content') || 'WordPress') :
+                  (document.querySelector('link[rel="https://api.w.org/"]') ? 'WordPress' : null);
+
+    // Shopify
+    const shopifyVal = (window.Shopify?.shop || window.Shopify?.theme?.name) ||
+                       (hasSrc('cdn.shopify.com') ? 'Detected' : null);
+
+    // Wix
+    const wixVal = hasSrc('static.wixstatic.com') ? 'Detected' : null;
+
+    // Webflow
+    const webflowVal = (hasSrc('webflow.com') || !!document.querySelector('[data-wf-site]'))
+      ? (document.querySelector('[data-wf-site]')?.getAttribute('data-wf-site') || 'Detected') : null;
+
+    // Next.js / React / Vue (framework hints)
+    const nextVal   = hasSrc('/_next/') ? 'Detected' : null;
+    const nuxtVal   = hasSrc('/_nuxt/') ? 'Detected' : null;
+
+    ov.tech = [
+      // Tag Managers
+      { group: 'Tag Manager',         name: 'Google Tag Manager',  value: gtmId },
+      // Analytics
+      { group: 'Analytics',           name: 'Google Analytics',    value: ga4Id || uaId },
+      { group: 'Analytics',           name: 'Microsoft Clarity',   value: clarityId },
+      { group: 'Analytics',           name: 'Hotjar',              value: hotjarId },
+      // Advertising & Pixels
+      { group: 'Advertising & Pixels',name: 'Google Ads',          value: gadsId },
+      { group: 'Advertising & Pixels',name: 'Meta Pixel',          value: metaId },
+      { group: 'Advertising & Pixels',name: 'TikTok Pixel',        value: tiktokId },
+      { group: 'Advertising & Pixels',name: 'LinkedIn Insight',    value: linkedinId },
+      // CMS / Platform
+      { group: 'CMS / Platform',      name: 'WordPress',           value: wpVer },
+      { group: 'CMS / Platform',      name: 'Shopify',             value: shopifyVal },
+      { group: 'CMS / Platform',      name: 'Wix',                 value: wixVal },
+      { group: 'CMS / Platform',      name: 'Webflow',             value: webflowVal },
+      // Frameworks
+      { group: 'Framework',           name: 'Next.js',             value: nextVal },
+      { group: 'Framework',           name: 'Nuxt.js',             value: nuxtVal },
+    ];
 
     return data;
   }

@@ -61,30 +61,32 @@ let _schemaPretty = new Map();   // idx → pretty JSON string (avoids large dat
     .full-text-val span:first-child { flex: 1; min-width: 0; }
 
     /* ══════════════════════════════════════════════════════════
-       SEO X-RAY — Inner tabs
+       SEO X-RAY — Inner tabs (pill style, distinct from parent underline tabs)
     ══════════════════════════════════════════════════════════ */
     .ov-tabs-bar {
-      display: flex; gap: 2px; padding: 8px 10px 0;
-      background: var(--card); border-bottom: 1px solid var(--border);
+      display: flex; gap: 5px; padding: 7px 10px;
+      background: var(--bg); border-bottom: 1px solid var(--border);
       position: sticky; top: 0; z-index: 10; overflow-x: auto;
+      flex-wrap: nowrap;
       transition: background .25s, border-color .25s;
     }
     .ov-tabs-bar::-webkit-scrollbar { display: none; }
     .ov-tab-btn {
-      padding: 5px 10px 7px; border: none; background: none;
-      cursor: pointer; font-family: inherit; font-size: 12px;
-      font-weight: 600; color: var(--t3); position: relative;
-      transition: color .15s; border-radius: 4px 4px 0 0;
-      white-space: nowrap;
+      padding: 4px 12px;
+      border: 1.5px solid var(--border); background: var(--card);
+      cursor: pointer; font-family: inherit; font-size: 11px;
+      font-weight: 600; color: var(--t3); border-radius: 20px;
+      transition: all .15s; white-space: nowrap; position: relative;
     }
-    .ov-tab-btn::after {
-      content: ''; position: absolute; bottom: 0; left: 0; right: 0;
-      height: 2px; background: var(--blue); border-radius: 2px 2px 0 0;
-      transform: scaleX(0); transition: transform .2s;
+    .ov-tab-btn::after { display: none; }
+    .ov-tab-btn.active {
+      background: var(--blue); border-color: var(--blue);
+      color: #fff; font-weight: 700;
     }
-    .ov-tab-btn.active { color: var(--blue); }
-    .ov-tab-btn.active::after { transform: scaleX(1); }
-    .ov-tab-btn:hover:not(.active) { color: var(--t1); background: var(--hover-bg); }
+    .ov-tab-btn:hover:not(.active) {
+      border-color: var(--blue); color: var(--blue);
+      background: var(--blue-lt);
+    }
     .ov-panel { display: none; }
     .ov-panel.active { display: block; }
 
@@ -260,6 +262,162 @@ let _schemaPretty = new Map();   // idx → pretty JSON string (avoids large dat
     .ov-copy-btn:hover { background: var(--blue-lt); border-color: var(--blue); color: var(--blue); }
     .ov-copy-btn.copied { background: var(--green-lt); border-color: var(--green); color: var(--green); }
 
+
+    /* ── Phase 4: Search, Format bar, Export, Keyword Table ─── */
+    .ov-toolbar {
+      display: flex; align-items: center; gap: 6px;
+      padding: 8px 12px; background: var(--card);
+      border-bottom: 1px solid var(--border);
+      transition: background .25s, border-color .25s;
+    }
+    .ov-search {
+      flex: 1; padding: 5px 10px; border-radius: 20px;
+      border: 1.5px solid var(--border); background: var(--input-bg);
+      color: var(--t1); font-size: 11px; font-family: inherit;
+      outline: none; transition: border-color .15s;
+    }
+    .ov-search:focus { border-color: var(--blue); }
+    .ov-search::placeholder { color: var(--t4); }
+    .ov-export-btn {
+      display: flex; align-items: center; gap: 5px;
+      padding: 5px 11px; border-radius: 20px; white-space: nowrap;
+      background: var(--blue); color: #fff; border: none;
+      font-size: 10.5px; font-weight: 700; cursor: pointer;
+      font-family: inherit; transition: opacity .15s;
+    }
+    .ov-export-btn:hover { opacity: .85; }
+    .ov-export-btn.green { background: var(--green); }
+    .ov-fmt-bar {
+      display: flex; flex-wrap: wrap; gap: 5px; align-items: center;
+      padding: 8px 12px; background: var(--card);
+      border-bottom: 1px solid var(--border);
+      transition: background .25s, border-color .25s;
+    }
+    .ov-fmt-pill {
+      display: flex; align-items: center; gap: 4px;
+      padding: 3px 9px; border-radius: 12px; cursor: pointer;
+      font-size: 10.5px; font-weight: 700; border: 1.5px solid transparent;
+      transition: all .15s; background: var(--border2); color: var(--t2);
+    }
+    .ov-fmt-pill:hover { border-color: var(--blue); color: var(--blue); }
+    .ov-item-num {
+      width: 22px; height: 22px; border-radius: 50%;
+      background: var(--border2); color: var(--t4);
+      font-size: 9px; font-weight: 800;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .kw-toolbar { display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: var(--card); border-bottom: 1px solid var(--border); }
+    .kw-stats { display: flex; gap: 10px; padding: 7px 12px 6px; background: var(--bg); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+    .kw-stat { font-size: 10.5px; color: var(--t3); }
+    .kw-stat strong { color: var(--t1); font-weight: 800; }
+    .kw-export-row { display: flex; gap: 6px; padding: 7px 12px; background: var(--card); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+    .kw-exp-btn {
+      padding: 4px 11px; border-radius: 6px; font-size: 10px; font-weight: 700;
+      cursor: pointer; font-family: inherit; transition: all .15s;
+      border: 1.5px solid var(--border); background: var(--bg); color: var(--t2);
+    }
+    .kw-exp-btn:hover { border-color: var(--blue); color: var(--blue); background: var(--blue-lt); }
+    /* Keyword export dropdown */
+    .kw-dl-wrap { position: relative; }
+    .kw-dl-btn {
+      display: flex; align-items: center; gap: 5px;
+      padding: 5px 12px; border-radius: 20px;
+      background: var(--blue); color: #fff; border: none;
+      font-size: 10.5px; font-weight: 700; cursor: pointer;
+      font-family: inherit; transition: opacity .15s;
+    }
+    .kw-dl-btn:hover { opacity: .85; }
+    .kw-dl-menu {
+      position: absolute; top: calc(100% + 5px); right: 0;
+      background: var(--card); border: 1.5px solid var(--border);
+      border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,.15);
+      overflow: hidden; z-index: 50; min-width: 140px;
+      animation: fadeIn .12s ease;
+    }
+    .kw-dl-menu-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 9px 14px; font-size: 11px; font-weight: 600;
+      color: var(--t1); cursor: pointer; border: none;
+      background: none; width: 100%; font-family: inherit;
+      transition: background .12s; text-align: left;
+    }
+    .kw-dl-menu-item:hover { background: var(--hover-bg); color: var(--blue); }
+    .kw-table-wrap { overflow-x: auto; }
+    .kw-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+    .kw-table th {
+      padding: 7px 10px; text-align: left; font-size: 10px; font-weight: 800;
+      color: var(--t4); text-transform: uppercase; letter-spacing: .4px;
+      background: var(--bg); border-bottom: 2px solid var(--border);
+      white-space: nowrap; cursor: pointer; user-select: none;
+      position: sticky; top: 0; transition: background .25s, border-color .25s;
+    }
+    .kw-table th:hover { color: var(--blue); }
+    .kw-table th.sort-asc::after  { content: " ↑"; color: var(--blue); }
+    .kw-table th.sort-desc::after { content: " ↓"; color: var(--blue); }
+    .kw-table td {
+      padding: 6px 10px; border-bottom: 1px solid var(--border2);
+      background: var(--card); color: var(--t1); transition: background .12s;
+    }
+    .kw-table tr:hover td { background: var(--hover-bg); }
+    .kw-table tr:last-child td { border-bottom: none; }
+    .kw-table td:first-child { color: var(--t4); font-size: 10px; }
+    .kw-word { font-weight: 700; }
+    .kw-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 18px; height: 18px; border-radius: 4px; font-size: 9px; font-weight: 800;
+    }
+    .kw-badge.yes-b { background: var(--blue-lt);   color: var(--blue);   }
+    .kw-badge.yes-i { background: var(--purple-lt); color: var(--purple); }
+    .kw-badge.no    { background: var(--border2);   color: var(--t4);     }
+    .prom-dots { display: flex; gap: 2px; align-items: center; }
+    .prom-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--border2); }
+    .prom-dot.on { background: var(--blue); }
+
+    /* ── Tech Stack Tab ─────────────────────────────────────────── */
+    .tech-summary {
+      display: flex; align-items: center; gap: 8px;
+      padding: 9px 15px; background: var(--card);
+      font-size: 11px; color: var(--t2);
+      border-bottom: 2px solid var(--border);
+      transition: background .25s, border-color .25s;
+    }
+    .tech-summary strong { color: var(--green); font-size: 14px; }
+    .tech-group {
+      background: var(--card); margin-bottom: 4px;
+      transition: background .25s;
+    }
+    .tech-group-head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 15px 5px;
+      font-size: 10.5px; font-weight: 800; color: var(--t3);
+      text-transform: uppercase; letter-spacing: .5px;
+      background: var(--bg); border-bottom: 1px solid var(--border);
+      border-top: 1px solid var(--border);
+      transition: background .25s, border-color .25s;
+    }
+    .tech-group-badge {
+      font-size: 9px; font-weight: 800; padding: 2px 7px;
+      border-radius: 8px; background: var(--green-lt); color: var(--green);
+      text-transform: none; letter-spacing: 0;
+    }
+    .tech-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 15px; border-bottom: 1px solid var(--border2);
+      transition: background .12s;
+    }
+    .tech-row:last-child { border-bottom: none; }
+    .tech-row:hover { background: var(--hover-bg); }
+    .tech-name { font-size: 11.5px; font-weight: 600; color: var(--t1); }
+    .tech-row--off .tech-name { color: var(--t4); }
+    .tech-val { display: flex; align-items: center; gap: 6px; }
+    .tech-val--none { color: var(--border); font-size: 13px; }
+    .tech-val--found { }
+    .tech-id {
+      font-size: 11px; font-weight: 700; color: var(--green);
+      font-family: 'Menlo','Consolas',monospace; letter-spacing: .3px;
+      max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
     /* ── Load More button ─────────────────────────────────────── */
     .ov-load-more-btn {
       display: flex; align-items: center; justify-content: center;
@@ -729,6 +887,7 @@ function renderResults(scores, data) {
     : scores.suggestions.map(suggCard).join('');
 
   renderDetails(data, scores);
+  renderOvTech(data.overview);
   renderOverview(data);
 }
 
@@ -910,6 +1069,7 @@ function renderOverview(data) {
   renderOvImages(OV);
   renderOvLinks(OV);
   renderOvSchema(OV);
+  renderOvKeywords(OV);
 }
 
 // ── Page Summary ──────────────────────────────────────────────────────────────
@@ -933,7 +1093,6 @@ function renderOvSummary(S, OV) {
     <div class="ov-meta-table">
       ${row('Title',      titleVal,  S.title?(S.titleLength>=30&&S.titleLength<=60?'good':'warn'):'missing')}
       ${row('Description',descVal,   S.metaDescription?(S.metaDescriptionLength>=140&&S.metaDescriptionLength<=160?'good':'warn'):'missing')}
-      ${row('Keywords',   OV.keywords?esc(OV.keywords.slice(0,100)):'Keywords are missing!', OV.keywords?'':'missing')}
       ${row('Canonical',  S.canonical?esc(S.canonical):'Canonical URL is not defined.', S.canonical?'good':'missing')}
       ${row('Robots Tag', OV.robots?esc(OV.robots.toUpperCase()):'Not defined (defaults to index, follow)', OV.robots?(OV.robots.toLowerCase().includes('noindex')?'warn':''):'warn')}
       ${row('Language',   OV.lang?esc(OV.lang):'Not defined!', OV.lang?'good':'missing')}
@@ -949,7 +1108,7 @@ function renderOvSummary(S, OV) {
       ${statCell('Links', totalLinks)}
     </div>`;
 
-  // Wire copy buttons via delegation
+  // Wire copy buttons
   el.addEventListener('click', e => {
     const btn = e.target.closest('.ov-copy-btn[data-copy]');
     if (btn) copyToClipboard(btn.dataset.copy, btn);
@@ -989,6 +1148,7 @@ function copyIconSVG() {
 function renderOvImages(OV) {
   const el   = document.getElementById('ovImagesContent');
   const imgs = OV.imagesList || [];
+  const fmts = OV.imageFormats || {};
 
   _imgSections = {
     broken:    imgs.filter(i => i.broken),
@@ -1002,8 +1162,12 @@ function renderOvImages(OV) {
     return `<span class="ov-img-attr-val ok">${esc((val||'').slice(0,60))}</span>`;
   };
 
-  _imgCardFn = (img) => `
-    <div class="ov-img-card ${img.broken?'is-broken':''}">
+  let _globalIdx = 0;
+  _imgCardFn = (img) => {
+    _globalIdx++;
+    return `
+    <div class="ov-img-card ${img.broken?'is-broken':''}" data-fmt="${img.format||'OTHER'}" data-filename="${esc((img.filename||'').toLowerCase())}">
+      <div class="ov-item-num">${_globalIdx}</div>
       <div class="ov-img-thumb ${img.broken?'broken-thumb':''}">
         ${img.broken
           ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>'
@@ -1014,6 +1178,7 @@ function renderOvImages(OV) {
         <div style="display:flex;align-items:center;gap:5px;margin-bottom:3px;">
           <button class="ov-copy-btn" data-copy="${esc(img.src)}" title="Copy URL">${copyIconSVG()}</button>
           <span class="ov-img-filename" title="${esc(img.src)}">${esc(img.filename)}</span>
+          ${img.format && img.format !== 'OTHER' ? `<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:4px;background:var(--border2);color:var(--t3);">${img.format}</span>` : ''}
         </div>
         <div class="ov-img-attrs">
           <span class="ov-img-attr"><span class="ov-img-attr-key">ALT:</span>${attrVal(img.alt, img.hasAlt)}</span>
@@ -1021,8 +1186,16 @@ function renderOvImages(OV) {
         </div>
       </div>
     </div>`;
+  };
 
-  // Build section HTML with initial batch + Load More btn
+  // Format pills
+  const fmtOrder = ['WEBP','SVG','AVIF','PNG','JPG','GIF','OTHER'];
+  const fmtPills = fmtOrder
+    .filter(f => fmts[f] > 0)
+    .map(f => `<span class="ov-fmt-pill" data-fmt="${f}"><span class="fmt-count">${fmts[f]}</span> ${f}</span>`)
+    .join('');
+
+  // Section builder with Load More
   const sectionHTML = (key, labelHTML, labelClass, list) => {
     if (!list.length) return '';
     const initial = list.slice(0, IMG_PAGE);
@@ -1030,32 +1203,174 @@ function renderOvImages(OV) {
     return `
       <div class="ov-img-section ${labelClass}">${labelHTML} (${list.length})</div>
       <div class="ov-img-list" id="imgList-${key}">${initial.map(_imgCardFn).join('')}</div>
-      ${hasMore ? `<button class="ov-load-more-btn" data-list="img" data-section="${key}" data-offset="${IMG_PAGE}">
-        Load More — ${list.length - IMG_PAGE} remaining
-      </button>` : ''}`;
+      ${hasMore ? `<button class="ov-load-more-btn" data-list="img" data-section="${key}" data-offset="${IMG_PAGE}">Load More — ${list.length - IMG_PAGE} remaining</button>` : ''}`;
   };
 
   el.innerHTML = `
+    <!-- Stats -->
     <div class="ov-img-stats">
       <div class="ov-img-stat"><span class="ov-img-stat-label">Images</span><span class="ov-img-stat-num neutral">${OV.imagesTotal}</span></div>
       <div class="ov-img-stat"><span class="ov-img-stat-label">Broken</span><span class="ov-img-stat-num ${OV.imagesBroken>0?'broken':'ok'}">${OV.imagesBroken}</span></div>
       <div class="ov-img-stat"><span class="ov-img-stat-label">Without ALT</span><span class="ov-img-stat-num ${OV.imagesWithoutAlt>0?'problem':'ok'}">${OV.imagesWithoutAlt}</span></div>
       <div class="ov-img-stat"><span class="ov-img-stat-label">Without Title</span><span class="ov-img-stat-num ${OV.imagesWithoutTitle>0?'problem':'ok'}">${OV.imagesWithoutTitle}</span></div>
     </div>
-    ${sectionHTML('broken',    '⚠ Broken Images',       'broken-section', _imgSections.broken)}
-    ${sectionHTML('toFix',     '⚠ Images to Complete',  '',               _imgSections.toFix)}
-    ${sectionHTML('completed', '✓ Completed',            '',               _imgSections.completed)}
-    ${!imgs.length ? `<div class="ov-empty"><div class="ov-empty-icon">🖼️</div><div class="ov-empty-text">No images found</div><div class="ov-empty-sub">This page contains no &lt;img&gt; elements.</div></div>` : ''}`;
+    <!-- Format pills -->
+    ${fmtPills ? `<div class="ov-fmt-bar"><span style="font-size:10px;font-weight:700;color:var(--t4);margin-right:2px;">Formats:</span>${fmtPills}</div>` : ''}
+    <!-- Toolbar: search + download -->
+    <div class="ov-toolbar">
+      <input class="ov-search" id="imgSearch" placeholder="Search by filename…" type="text">
+      <button class="ov-export-btn green" id="btnDownloadImgs">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Download All
+      </button>
+    </div>
+    <!-- Lists -->
+    <div id="imgAllSections">
+      ${sectionHTML('broken',    '⚠ Broken Images',      'broken-section', _imgSections.broken)}
+      ${sectionHTML('toFix',     '⚠ Images to Complete', '',               _imgSections.toFix)}
+      ${sectionHTML('completed', '✓ Completed',           '',               _imgSections.completed)}
+      ${!imgs.length ? `<div class="ov-empty"><div class="ov-empty-icon">🖼️</div><div class="ov-empty-text">No images found</div></div>` : ''}
+    </div>`;
 
-  // Wire Load More buttons
+  // Wire Load More
   el.querySelectorAll('.ov-load-more-btn[data-list="img"]').forEach(btn => {
     btn.addEventListener('click', () => loadMoreImages(btn));
   });
 
-  // Wire copy buttons via delegation
+  // Copy buttons
   el.addEventListener('click', e => {
     const btn = e.target.closest('.ov-copy-btn[data-copy]');
     if (btn) copyToClipboard(btn.dataset.copy, btn);
+  });
+
+  // Format filter — single-select, all images (loads all into DOM on filter)
+  let _activeFmt = null;
+  el.querySelectorAll('.ov-fmt-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      const fmt = pill.dataset.fmt;
+      if (_activeFmt === fmt) {
+        _activeFmt = null;
+        pill.classList.remove('active');
+      } else {
+        el.querySelectorAll('.ov-fmt-pill').forEach(p => p.classList.remove('active'));
+        pill.classList.add('active');
+        _activeFmt = fmt;
+      }
+      applyImgFilters(el, imgs);
+    });
+  });
+
+  // Search — applies to ALL images including unloaded ones
+  el.querySelector('#imgSearch').addEventListener('input', e => {
+    applyImgFilters(el, imgs);
+  });
+
+  // Download All
+  el.querySelector('#btnDownloadImgs').addEventListener('click', () => {
+    const urls = imgs.map(i => i.src).filter(Boolean);
+    downloadBlob(urls.join('\n'), 'text/plain', `images-${location.hostname||'page'}.txt`);
+  });
+}
+
+// Apply format filter + search across ALL images, re-rendering if needed
+function applyImgFilters(el, allImgs) {
+  const q      = (el.querySelector('#imgSearch')?.value || '').toLowerCase().trim();
+  const fmt    = el.querySelector('.ov-fmt-pill.active')?.dataset.fmt || null;
+
+  const matches = allImgs.filter(img => {
+    const fmtOk  = !fmt || (img.format || 'OTHER') === fmt;
+    const textOk = !q   || (img.filename || '').toLowerCase().includes(q) ||
+                           (img.src || '').toLowerCase().includes(q);
+    return fmtOk && textOk;
+  });
+
+  const isFiltering = q || fmt;
+
+  if (isFiltering) {
+    // Show flat filtered list replacing all sections
+    const container = el.querySelector('#imgAllSections');
+    if (!container) return;
+
+    // Reset counters for numbering
+    let idx = 0;
+    const attrVal = (val, present) => {
+      if (!present && val === null) return `<span class="ov-img-attr-val miss">/ (missing)</span>`;
+      if (!present && val === '')   return `<span class="ov-img-attr-val empty">/ (empty)</span>`;
+      return `<span class="ov-img-attr-val ok">${esc((val||'').slice(0,60))}</span>`;
+    };
+    const cards = matches.map(img => {
+      idx++;
+      return `
+      <div class="ov-img-card ${img.broken?'is-broken':''}" data-fmt="${img.format||'OTHER'}" data-filename="${esc((img.filename||'').toLowerCase())}">
+        <div class="ov-item-num">${idx}</div>
+        <div class="ov-img-thumb ${img.broken?'broken-thumb':''}">
+          ${img.broken
+            ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>'
+            : img.src ? `<img src="${esc(img.src)}" alt="" onerror="this.style.display='none';this.parentNode.innerHTML='🖼️'">` : '🖼️'}
+        </div>
+        <div class="ov-img-info">
+          ${img.broken ? '<span class="ov-img-broken-badge">⚠ 404 / Broken</span>' : ''}
+          <div style="display:flex;align-items:center;gap:5px;margin-bottom:3px;">
+            <button class="ov-copy-btn" data-copy="${esc(img.src)}" title="Copy URL">${copyIconSVG()}</button>
+            <span class="ov-img-filename" title="${esc(img.src)}">${esc(img.filename)}</span>
+            ${img.format && img.format !== 'OTHER' ? `<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:4px;background:var(--border2);color:var(--t3);">${img.format}</span>` : ''}
+          </div>
+          <div class="ov-img-attrs">
+            <span class="ov-img-attr"><span class="ov-img-attr-key">ALT:</span>${attrVal(img.alt, img.hasAlt)}</span>
+            <span class="ov-img-attr"><span class="ov-img-attr-key">Title:</span>${attrVal(img.title||null, img.hasTitle)}</span>
+          </div>
+        </div>
+      </div>`;
+    });
+
+    container.innerHTML = matches.length
+      ? `<div class="ov-img-section" style="background:var(--blue-lt);color:var(--blue);">🔍 ${matches.length} result${matches.length!==1?'s':''} found</div>${cards.join('')}`
+      : `<div class="ov-empty"><div class="ov-empty-icon">🔍</div><div class="ov-empty-text">No images match</div></div>`;
+
+  } else {
+    // Restore original paginated sections — re-render
+    renderOvImages_restore(el, allImgs);
+  }
+}
+
+function renderOvImages_restore(el, imgs) {
+  const container = el.querySelector('#imgAllSections');
+  if (!container) return;
+
+  // Reset global index
+  let idx = 0;
+  const mkCard = _imgCardFn;  // reuse existing card fn (already has closure on attrVal)
+
+  const sectionHTML = (key, labelHTML, labelClass, list) => {
+    if (!list.length) return '';
+    // Slice for pagination
+    const initial = list.slice(0, IMG_PAGE);
+    const hasMore = list.length > IMG_PAGE;
+    return `
+      <div class="ov-img-section ${labelClass}">${labelHTML} (${list.length})</div>
+      <div class="ov-img-list" id="imgList-${key}">${initial.map(_imgCardFn).join('')}</div>
+      ${hasMore ? `<button class="ov-load-more-btn" data-list="img" data-section="${key}" data-offset="${IMG_PAGE}">Load More — ${list.length - IMG_PAGE} remaining</button>` : ''}`;
+  };
+
+  // Reset section counters
+  _imgSections = {
+    broken:    imgs.filter(i => i.broken),
+    toFix:     imgs.filter(i => !i.broken && !i.complete),
+    completed: imgs.filter(i => !i.broken && i.complete)
+  };
+
+  // Re-number from 1
+  let n = 0;
+  const renum = (html) => html; // numbering is set during _imgCardFn calls
+
+  container.innerHTML =
+    sectionHTML('broken',    '⚠ Broken Images',      'broken-section', _imgSections.broken) +
+    sectionHTML('toFix',     '⚠ Images to Complete', '',               _imgSections.toFix) +
+    sectionHTML('completed', '✓ Completed',           '',               _imgSections.completed) +
+    (!imgs.length ? `<div class="ov-empty"><div class="ov-empty-icon">🖼️</div><div class="ov-empty-text">No images found</div></div>` : '');
+
+  container.querySelectorAll('.ov-load-more-btn[data-list="img"]').forEach(btn => {
+    btn.addEventListener('click', () => loadMoreImages(btn));
   });
 }
 
@@ -1065,20 +1380,13 @@ function loadMoreImages(btn) {
   const list    = _imgSections[section] || [];
   const next    = list.slice(offset, offset + IMG_PAGE);
   const remaining = list.length - offset - IMG_PAGE;
-
-  // Append new cards before the button
   const container = document.getElementById(`imgList-${section}`);
   container.insertAdjacentHTML('beforeend', next.map(_imgCardFn).join(''));
-
-  if (remaining > 0) {
-    btn.dataset.offset = offset + IMG_PAGE;
-    btn.textContent    = `Load More — ${remaining} remaining`;
-  } else {
-    btn.remove(); // All loaded — hide button
-  }
+  if (remaining > 0) { btn.dataset.offset = offset + IMG_PAGE; btn.textContent = `Load More — ${remaining} remaining`; }
+  else { btn.remove(); }
 }
 
-// ── Links (with Load More) ────────────────────────────────────────────────────
+// ── Links (with Load More, Search, Export) ───────────────────────────────────
 
 function renderOvLinks(OV) {
   const el    = document.getElementById('ovLinksContent');
@@ -1093,14 +1401,19 @@ function renderOvLinks(OV) {
       ? `<span class="ov-link-badge badge-internal">Internal</span>`
       : `<span class="ov-link-badge badge-external">External</span>`;
 
-  _linkItemFn = l => `<div class="ov-link-item">
+  let _linkIdx = 0;
+  _linkItemFn = l => {
+    _linkIdx++;
+    return `<div class="ov-link-item" data-href="${esc((l.href||'').toLowerCase())}">
     <div class="ov-link-row1">
+      <span class="ov-item-num">${_linkIdx}</span>
       <button class="ov-copy-btn" data-copy="${esc(l.href)}" title="Copy URL">${copyIconSVG()}</button>
-      ${badge(l)}<span class="ov-link-href" title="${esc(l.href)}">${esc(l.href.length>55?l.href.slice(0,52)+'…':l.href)}</span>
+      ${badge(l)}<span class="ov-link-href" title="${esc(l.href)}">${esc(l.href.length>50?l.href.slice(0,47)+'…':l.href)}</span>
     </div>
     <div class="ov-link-title">Title: ${l.title?`<span class="ov-link-title-val">${esc(l.title)}</span>`:`<span class="ov-link-title-miss">not defined</span>`}</div>
-    ${l.count>1?`<div class="ov-link-occ">↩ Found ${l.count-1} more occurrence${l.count>2?'s':''} of this link</div>`:''}
+    ${l.count>1?`<div class="ov-link-occ">↩ Found ${l.count-1} more occurrence${l.count>2?'s':''}</div>`:''}
   </div>`;
+  };
 
   const initial   = _linksAll.slice(0, LINK_PAGE);
   const remaining = _linksAll.length - LINK_PAGE;
@@ -1112,21 +1425,46 @@ function renderOvLinks(OV) {
       <div class="ov-link-stat"><span class="ov-link-stat-label">Internal Unique</span><span class="ov-link-stat-num blue">${OV.internalUniqueLinks||0}</span></div>
       <div class="ov-link-stat"><span class="ov-link-stat-label">Without Title</span><span class="ov-link-stat-num ${OV.linksWithoutTitle>0?'warn':'blue'}">${OV.linksWithoutTitle||0}</span></div>
     </div>
+    <!-- Toolbar: search + export -->
+    <div class="ov-toolbar">
+      <input class="ov-search" id="linkSearch" placeholder="Search links…" type="text">
+      <button class="ov-export-btn" id="btnExportLinks">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Export CSV
+      </button>
+    </div>
     <div class="ov-links-label">Links &lt;a/&gt;</div>
     <div id="linkListContainer">${initial.map(_linkItemFn).join('')}</div>
-    ${remaining > 0 ? `<button class="ov-load-more-btn" data-list="links" data-offset="${LINK_PAGE}">
-      Load More — ${remaining} remaining
-    </button>` : ''}
-    ${!_linksAll.length ? `<div class="ov-empty"><div class="ov-empty-icon">🔗</div><div class="ov-empty-text">No links found</div><div class="ov-empty-sub">This page contains no anchor elements.</div></div>` : ''}`;
+    ${remaining > 0 ? `<button class="ov-load-more-btn" data-list="links" data-offset="${LINK_PAGE}">Load More — ${remaining} remaining</button>` : ''}
+    ${!_linksAll.length ? `<div class="ov-empty"><div class="ov-empty-icon">🔗</div><div class="ov-empty-text">No links found</div></div>` : ''}`;
 
   // Wire Load More
-  const btn = el.querySelector('.ov-load-more-btn[data-list="links"]');
-  if (btn) btn.addEventListener('click', () => loadMoreLinks(btn));
+  const lmBtn = el.querySelector('.ov-load-more-btn[data-list="links"]');
+  if (lmBtn) lmBtn.addEventListener('click', () => loadMoreLinks(lmBtn));
 
-  // Wire copy buttons via delegation
+  // Copy
   el.addEventListener('click', e => {
-    const copyBtn = e.target.closest('.ov-copy-btn[data-copy]');
-    if (copyBtn) copyToClipboard(copyBtn.dataset.copy, copyBtn);
+    const btn = e.target.closest('.ov-copy-btn[data-copy]');
+    if (btn) copyToClipboard(btn.dataset.copy, btn);
+  });
+
+  // Search
+  el.querySelector('#linkSearch').addEventListener('input', e => {
+    const q = e.target.value.toLowerCase();
+    el.querySelectorAll('.ov-link-item').forEach(item => {
+      item.style.display = item.dataset.href.includes(q) ? '' : 'none';
+    });
+  });
+
+  // Export as CSV
+  el.querySelector('#btnExportLinks').addEventListener('click', () => {
+    const rows  = [['#','URL','Type','Title','Occurrences']];
+    _linksAll.forEach((l, i) => {
+      const type = l.isAnchor ? 'Anchor' : l.isInternal ? 'Internal' : 'External';
+      rows.push([i+1, l.href, type, l.title || '', l.count]);
+    });
+    const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+    downloadBlob(csv, 'text/csv', `links-${location.hostname || 'page'}.csv`);
   });
 }
 
@@ -1134,16 +1472,9 @@ function loadMoreLinks(btn) {
   const offset    = parseInt(btn.dataset.offset);
   const next      = _linksAll.slice(offset, offset + LINK_PAGE);
   const remaining = _linksAll.length - offset - LINK_PAGE;
-
-  document.getElementById('linkListContainer')
-    .insertAdjacentHTML('beforeend', next.map(_linkItemFn).join(''));
-
-  if (remaining > 0) {
-    btn.dataset.offset = offset + LINK_PAGE;
-    btn.textContent    = `Load More — ${remaining} remaining`;
-  } else {
-    btn.remove();
-  }
+  document.getElementById('linkListContainer').insertAdjacentHTML('beforeend', next.map(_linkItemFn).join(''));
+  if (remaining > 0) { btn.dataset.offset = offset + LINK_PAGE; btn.textContent = `Load More — ${remaining} remaining`; }
+  else { btn.remove(); }
 }
 
 // ── Schema ────────────────────────────────────────────────────────────────────
@@ -1257,6 +1588,269 @@ function downloadJSON(data, filename) {
   const a    = document.createElement('a');
   a.href = url; a.download = filename; a.click();
   URL.revokeObjectURL(url);
+}
+
+// ── Tech Stack (shown in Overview tab, below audit scores) ───────────────────
+function renderOvTech(OV) {
+  const el   = document.getElementById('techContent');
+  if (!el) return;
+  const tech = OV.tech || [];
+
+  // Group items
+  const groups = {};
+  tech.forEach(item => {
+    if (!groups[item.group]) groups[item.group] = [];
+    groups[item.group].push(item);
+  });
+
+  const groupIcons = {
+    'Tag Manager':          '🏷',
+    'Analytics':            '📊',
+    'Advertising & Pixels': '📣',
+    'CMS / Platform':       '🔧',
+    'Framework':            '⚛️',
+  };
+
+  const detectedCount = tech.filter(t => t.value).length;
+  const totalCount    = tech.length;
+
+  const HIDE_UNDETECTED = new Set(['CMS / Platform', 'Framework']);
+
+  const groupsHTML = Object.entries(groups).map(([groupName, items]) => {
+    const detected = items.filter(i => i.value);
+    const icon = groupIcons[groupName] || '🔩';
+
+    // For CMS/Platform and Framework: hide entire group if nothing detected
+    if (HIDE_UNDETECTED.has(groupName) && !detected.length) return '';
+
+    const rows = items.map(item => {
+      // For CMS/Platform and Framework: skip undetected items entirely
+      if (HIDE_UNDETECTED.has(groupName) && !item.value) return '';
+
+      if (!item.value) {
+        return `<div class="tech-row tech-row--off">
+          <span class="tech-name">${esc(item.name)}</span>
+          <span class="tech-val tech-val--none">–</span>
+        </div>`;
+      }
+      const displayVal = item.value === 'Detected' ? item.name : item.value;
+      return `<div class="tech-row tech-row--on">
+        <span class="tech-name">${esc(item.name)}</span>
+        <span class="tech-val tech-val--found">
+          <span class="tech-id">${esc(displayVal)}</span>
+          <button class="ov-copy-btn" data-copy="${esc(displayVal)}" title="Copy">${copyIconSVG()}</button>
+        </span>
+      </div>`;
+    }).join('');
+
+    return `
+      <div class="tech-group">
+        <div class="tech-group-head">
+          <span>${icon} ${esc(groupName)}</span>
+          ${detected.length ? `<span class="tech-group-badge">${detected.length} detected</span>` : ''}
+        </div>
+        ${rows}
+      </div>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div class="tech-summary">
+      <span><strong>${detectedCount}</strong> tools detected</span>
+      <span style="color:var(--t4);">·</span>
+      <span style="color:var(--t4);">${totalCount - detectedCount} not found</span>
+    </div>
+    ${groupsHTML}`;
+
+  // Wire copy buttons
+  el.addEventListener('click', e => {
+    const btn = e.target.closest('.ov-copy-btn[data-copy]');
+    if (btn) copyToClipboard(btn.dataset.copy, btn);
+  });
+}
+
+// ── Download helper ───────────────────────────────────────────────────────────
+function downloadBlob(content, type, filename) {
+  const blob = new Blob([content], { type });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ── Keywords Tab ──────────────────────────────────────────────────────────────
+let _kwData      = [];   // full keyword array
+let _kwFiltered  = [];   // after search filter
+let _kwSortCol   = '#';  // current sort column
+let _kwSortAsc   = false;// sort direction
+
+function renderOvKeywords(OV) {
+  const el  = document.getElementById('ovKeywordsContent');
+  _kwData   = OV.keywords || [];
+  const totalWords = OV.totalWordCount || 0;
+
+  if (!_kwData.length) {
+    el.innerHTML = `<div class="ov-empty" style="padding:32px;">
+      <div class="ov-empty-icon">🔤</div>
+      <div class="ov-empty-text">No keywords extracted</div>
+      <div class="ov-empty-sub">Page has insufficient visible text content (min. 2 occurrences per word).</div>
+    </div>`;
+    return;
+  }
+
+  el.innerHTML = `
+    <!-- Stats -->
+    <div class="kw-stats">
+      <span class="kw-stat"><strong>${_kwData.length}</strong> keywords</span>
+      <span class="kw-stat"><strong>${totalWords.toLocaleString()}</strong> total words</span>
+    </div>
+    <!-- Search + Download in one toolbar row -->
+    <div class="kw-toolbar">
+      <input class="ov-search" id="kwSearch" placeholder="Search keywords…" type="text">
+      <div class="kw-dl-wrap" id="kwDlWrap">
+        <button class="kw-dl-btn" id="kwDlBtn">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Download ▾
+        </button>
+      </div>
+    </div>
+    <!-- Table -->
+    <div class="kw-table-wrap">
+      <table class="kw-table" id="kwTable">
+        <thead>
+          <tr>
+            <th data-col="#">#</th>
+            <th data-col="word">Keyword</th>
+            <th data-col="count">Count</th>
+            <th data-col="density">Density</th>
+            <th data-col="bold">Bold</th>
+            <th data-col="italic">Italic</th>
+            <th data-col="prominence">Prominence</th>
+          </tr>
+        </thead>
+        <tbody id="kwTbody"></tbody>
+      </table>
+    </div>`;
+
+  _kwFiltered = [..._kwData];
+  _kwSortCol  = '#';
+  _kwSortAsc  = false;
+  renderKwTable(el);
+  updateKwSortHeaders(el);
+
+  // Sort on header click
+  el.querySelectorAll('.kw-table th').forEach(th => {
+    th.addEventListener('click', () => {
+      const col = th.dataset.col;
+      if (_kwSortCol === col) { _kwSortAsc = !_kwSortAsc; }
+      else { _kwSortCol = col; _kwSortAsc = col === 'word'; }
+      sortKwData();
+      renderKwTable(el);
+      updateKwSortHeaders(el);
+    });
+  });
+
+  // Search
+  el.querySelector('#kwSearch').addEventListener('input', e => {
+    const q = e.target.value.toLowerCase().trim();
+    _kwFiltered = q ? _kwData.filter(k => k.word.includes(q)) : [..._kwData];
+    sortKwData();
+    renderKwTable(el);
+  });
+
+  // Download dropdown
+  const dlWrap = el.querySelector('#kwDlWrap');
+  const dlBtn  = el.querySelector('#kwDlBtn');
+  dlBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    const existing = dlWrap.querySelector('.kw-dl-menu');
+    if (existing) { existing.remove(); return; }
+    const menu = document.createElement('div');
+    menu.className = 'kw-dl-menu';
+    menu.innerHTML = `
+      <button class="kw-dl-menu-item" data-fmt="csv">📄 CSV</button>
+      <button class="kw-dl-menu-item" data-fmt="json">{ } JSON</button>
+      <button class="kw-dl-menu-item" data-fmt="txt">📋 Plain Text</button>`;
+    dlWrap.appendChild(menu);
+
+    menu.querySelectorAll('.kw-dl-menu-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const fmt = item.dataset.fmt;
+        if (fmt === 'csv') {
+          const rows = [['#','Keyword','Count','Density %','Bold','Italic','Prominence']];
+          _kwData.forEach((k, i) => rows.push([i+1, k.word, k.count, k.density, k.bold?'Yes':'No', k.italic?'Yes':'No', k.prominence]));
+          const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+          downloadBlob(csv, 'text/csv', 'keywords.csv');
+        } else if (fmt === 'json') {
+          downloadBlob(JSON.stringify(_kwData.map((k,i)=>({rank:i+1,...k})),null,2), 'application/json', 'keywords.json');
+        } else {
+          const txt = _kwData.map((k,i)=>`${i+1}. ${k.word} (${k.count}x, ${k.density}%)`).join('\n');
+          downloadBlob(txt, 'text/plain', 'keywords.txt');
+        }
+        menu.remove();
+      });
+    });
+
+    // Close on outside click
+    const close = () => { menu.remove(); document.removeEventListener('click', close); };
+    setTimeout(() => document.addEventListener('click', close), 10);
+  });
+}
+
+function sortKwData() {
+  _kwFiltered.sort((a, b) => {
+    let va, vb;
+    switch (_kwSortCol) {
+      case '#':           va = _kwData.indexOf(a); vb = _kwData.indexOf(b); break;
+      case 'word':        va = a.word;         vb = b.word;         break;
+      case 'count':       va = a.count;        vb = b.count;        break;
+      case 'density':     va = a.density;      vb = b.density;      break;
+      case 'bold':        va = a.bold?1:0;     vb = b.bold?1:0;     break;
+      case 'italic':      va = a.italic?1:0;   vb = b.italic?1:0;   break;
+      case 'prominence':  va = a.prominence;   vb = b.prominence;   break;
+      default:            va = 0; vb = 0;
+    }
+    if (va < vb) return _kwSortAsc ? -1 : 1;
+    if (va > vb) return _kwSortAsc ? 1 : -1;
+    return 0;
+  });
+}
+
+function renderKwTable(el) {
+  const tbody = el.querySelector('#kwTbody');
+  if (!tbody) return;
+
+  const promDots = (p) => {
+    const max = 5; // max prominence score per threshold
+    const filled = Math.min(Math.round((p / 14) * 5), 5);
+    return `<div class="prom-dots">${Array.from({length:5},(_,i)=>`<div class="prom-dot${i<filled?' on':''}"></div>`).join('')}</div>`;
+  };
+
+  tbody.innerHTML = _kwFiltered.slice(0, 200).map((k, i) => {
+    const origRank = _kwData.indexOf(k) + 1;
+    return `<tr>
+      <td>${origRank}</td>
+      <td><span class="kw-word">${esc(k.word)}</span></td>
+      <td>${k.count}</td>
+      <td><span class="kw-density">${k.density}%</span></td>
+      <td><span class="kw-badge ${k.bold?'yes-b':'no'}">${k.bold?'B':'–'}</span></td>
+      <td><span class="kw-badge ${k.italic?'yes-i':'no'}">${k.italic?'I':'–'}</span></td>
+      <td>${promDots(k.prominence)}</td>
+    </tr>`;
+  }).join('');
+
+  if (_kwFiltered.length > 200) {
+    tbody.insertAdjacentHTML('beforeend',
+      `<tr><td colspan="7" style="text-align:center;color:var(--t4);font-size:10px;padding:8px;">Showing 200 of ${_kwFiltered.length} keywords</td></tr>`);
+  }
+}
+
+function updateKwSortHeaders(el) {
+  el.querySelectorAll('.kw-table th').forEach(th => {
+    th.classList.remove('sort-asc','sort-desc');
+    if (th.dataset.col === _kwSortCol) {
+      th.classList.add(_kwSortAsc ? 'sort-asc' : 'sort-desc');
+    }
+  });
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
