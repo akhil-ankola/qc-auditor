@@ -1171,7 +1171,7 @@ function renderOvImages(OV) {
       <div class="ov-img-thumb ${img.broken?'broken-thumb':''}">
         ${img.broken
           ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>'
-          : img.src ? `<img src="${esc(img.src)}" alt="" onerror="this.style.display='none';this.parentNode.innerHTML='🖼️'">` : '🖼️'}
+          : img.src ? `<img src="${esc(img.src)}" alt="" class="ov-thumb-img">` : '🖼️'}
       </div>
       <div class="ov-img-info">
         ${img.broken ? '<span class="ov-img-broken-badge">⚠ 404 / Broken</span>' : ''}
@@ -1243,6 +1243,14 @@ function renderOvImages(OV) {
     if (btn) copyToClipboard(btn.dataset.copy, btn);
   });
 
+  // Handle broken thumbnails via error event delegation (no inline onerror)
+  el.addEventListener('error', e => {
+    if (e.target.classList.contains('ov-thumb-img')) {
+      e.target.style.display = 'none';
+      e.target.parentNode.textContent = '🖼️';
+    }
+  }, true); // capture phase so it fires before default
+
   // Format filter — single-select, all images (loads all into DOM on filter)
   let _activeFmt = null;
   el.querySelectorAll('.ov-fmt-pill').forEach(pill => {
@@ -1306,7 +1314,7 @@ function applyImgFilters(el, allImgs) {
         <div class="ov-img-thumb ${img.broken?'broken-thumb':''}">
           ${img.broken
             ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>'
-            : img.src ? `<img src="${esc(img.src)}" alt="" onerror="this.style.display='none';this.parentNode.innerHTML='🖼️'">` : '🖼️'}
+            : img.src ? `<img src="${esc(img.src)}" alt="" class="ov-thumb-img">` : '🖼️'}
         </div>
         <div class="ov-img-info">
           ${img.broken ? '<span class="ov-img-broken-badge">⚠ 404 / Broken</span>' : ''}
