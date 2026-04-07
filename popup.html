@@ -92,9 +92,8 @@
     }
     .header-left { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
     .logo-wrap {
-      width: 28px; height: 28px; background: var(--blue); border-radius: 8px;
+      width: 28px; height: 28px; background: none; border-radius: 8px;
       display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-      transition: background .25s;
     }
     .brand { font-size: 14px; font-weight: 800; color: var(--t1); letter-spacing: -.3px; transition: color .25s; }
     .brand span { color: var(--blue); }
@@ -418,10 +417,7 @@
   <div class="header">
     <div class="header-left">
       <div class="logo-wrap">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-          <circle cx="8" cy="8" r="5.5" stroke="white" stroke-width="1.5"/>
-          <path d="M5.5 8l1.8 1.8 3.2-3.2" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
+        <img src="icons/icon48.png" width="24" height="24" alt="PagePulse" style="display:block;border-radius:6px;">
       </div>
       <span class="brand">Page<span>Pulse</span></span>
     </div>
