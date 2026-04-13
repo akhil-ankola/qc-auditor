@@ -449,6 +449,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   await initHistory();
   setupTabs();
   setupOverviewTabs();
+  setupFontsTab();
   await restoreActiveTab();
   await restoreActiveOvTab();
   document.getElementById('btnReanalyze').addEventListener('click', runAudit);
@@ -1937,3 +1938,124 @@ function esc(str) {
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  FONTS INFO TAB
+// ══════════════════════════════════════════════════════════════════════════════
+
+async function setupFontsTab() {
+  const btnRemove = document.getElementById('btnRemoveFontLayers');
+  const chkHover  = document.getElementById('chkShowAllOnHover');
+  const chkHex    = document.getElementById('chkShowHex');
+
+  // ── Always reset all checkboxes on popup open (page refresh resets state) ─
+  document.querySelectorAll('.fontPropChk').forEach(c => { c.checked = false; });
+  chkHover.checked = false;
+  chkHex.checked   = false;
+  await storageSet('activeFontProp', null);
+  // Remove any leftover overlays from previous session
+  await sendFontMessage({ action: 'removeFontLayers' });
+
+  // ── Single-select checkbox: checking one unchecks others, triggers inspector
+  document.querySelectorAll('.fontPropChk').forEach(chk => {
+    chk.addEventListener('change', async () => {
+      if (chk.checked) {
+        // Uncheck all others
+        document.querySelectorAll('.fontPropChk').forEach(c => {
+          if (c !== chk) c.checked = false;
+        });
+        // Deactivate "Show all infos on hover" if it was active
+        if (chkHover.checked) {
+          chkHover.checked = false;
+          await sendFontMessage({ action: 'removeFontLayers' });
+        }
+        await storageSet('activeFontProp', chk.value);
+        await runInspector(chk.value);
+      } else {
+        // Unchecked — remove overlays and clear persisted state
+        await storageSet('activeFontProp', null);
+        await sendFontMessage({ action: 'removeFontLayers' });
+      }
+    });
+  });
+
+  // ── Remove Layers: clear overlays + uncheck all + clear storage
+  btnRemove.addEventListener('click', async () => {
+    await sendFontMessage({ action: 'removeFontLayers' });
+    document.querySelectorAll('.fontPropChk').forEach(c => { c.checked = false; });
+    chkHover.checked = false;
+    await storageSet('activeFontProp', null);
+  });
+
+  // ── Show All on Hover toggle ───────────────────────────────────────────────
+  chkHover.addEventListener('change', async () => {
+    if (chkHover.checked) {
+      // Uncheck all property checkboxes and remove any overlays
+      document.querySelectorAll('.fontPropChk').forEach(c => { c.checked = false; });
+      await storageSet('activeFontProp', null);
+      await sendFontMessage({ action: 'removeFontLayers' });
+      // Activate inspector in hover-only mode (no overlay labels, just tooltip on hover)
+      await sendFontMessage({
+        action: 'activateFontInspector',
+        property: 'fontFamily',   // default property for hover-all mode
+        showAllOnHover: true,
+        showHex: chkHex.checked,
+        hoverOnlyMode: true        // signal: skip drawLayers, only attach hover
+      });
+    } else {
+      // Turned off — remove inspector
+      await sendFontMessage({ action: 'removeFontLayers' });
+    }
+  });
+
+  // ── Hex toggle: live-update active mode
+  chkHex.addEventListener('change', async () => {
+    if (chkHover.checked) {
+      // Re-activate hover-all mode with updated hex setting
+      await sendFontMessage({
+        action: 'activateFontInspector',
+        property: 'fontFamily',
+        showAllOnHover: true,
+        showHex: chkHex.checked,
+        hoverOnlyMode: true
+      });
+    } else {
+      const sel = document.querySelector('.fontPropChk:checked');
+      if (sel) await runInspector(sel.value);
+    }
+  });
+
+  async function runInspector(prop) {
+    return await sendFontMessage({
+      action: 'activateFontInspector',
+      property: prop,
+      showAllOnHover: chkHover.checked,
+      showHex: chkHex.checked,
+      hoverOnlyMode: false
+    });
+  }
+}
+
+function propLabel(prop) {
+  const map = {
+    fontWeight: 'Font Weight', fontSize: 'Font Size', fontFamily: 'Font Family',
+    fontStyle: 'Font Style', color: 'Font Color', lineHeight: 'Line Height',
+    letterSpacing: 'Letter Spacing', textTransform: 'Text Transform',
+    textDecoration: 'Text Decoration'
+  };
+  return map[prop] || prop;
+}
+
+async function sendFontMessage(msg) {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab) return null;
+    try {
+      await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content.js'] });
+    } catch (_) {}
+    return await chrome.tabs.sendMessage(tab.id, msg);
+  } catch (err) {
+    // silent fail — font inspector not available on this page
+    return null;
+  }
+}

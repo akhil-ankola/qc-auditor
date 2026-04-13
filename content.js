@@ -556,6 +556,360 @@ if (!window.__qcAuditorLoaded) {
       try { sendResponse({ success: true, data: collectAuditData() }); }
       catch (err) { sendResponse({ success: false, error: err.message }); }
     }
+    if (request.action === 'activateFontInspector') {
+      try {
+        window.FontInspector.activate(request.property, request.showAllOnHover, request.showHex, request.hoverOnlyMode || false);
+        sendResponse({ success: true });
+      } catch (err) { sendResponse({ success: false, error: err.message }); }
+    }
+    if (request.action === 'removeFontLayers') {
+      try { window.FontInspector.remove(); sendResponse({ success: true }); }
+      catch (err) { sendResponse({ success: false, error: err.message }); }
+    }
     return true;
   });
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  FONT INSPECTOR ENGINE  (runs in the page context)
+// ══════════════════════════════════════════════════════════════════════════════
+if (!window.__FontInspectorLoaded) {
+  window.__FontInspectorLoaded = true;
+
+window.FontInspector = (() => {
+  let styleEl        = null;
+  let tooltip        = null;
+  let currentProp    = null;
+  let showAllOnHover = false;
+  let showHex        = false;
+  let boundMouseMove = null;
+  let boundMouseLeave= null;
+  let layers         = []; // { el, span, origPosition }
+
+  // ─── Property config ──────────────────────────────────────────────────────
+  const PROP_LABELS = {
+    fontWeight:'Weight', fontSize:'Size', fontFamily:'Family',
+    fontStyle:'Style', color:'Color', lineHeight:'Line H',
+    letterSpacing:'Sp', textTransform:'TT', textDecoration:'TD'
+  };
+
+  const PROP_COLORS = {
+    fontWeight:    ['#1A73E8','#E8F0FE'],
+    fontSize:      ['#1E8E3E','#E6F4EA'],
+    fontFamily:    ['#7B2FBE','#F3E8FD'],
+    fontStyle:     ['#E37400','#FEF3E2'],
+    color:         ['#D93025','#FCE8E6'],
+    lineHeight:    ['#2E7D32','#E8F5E9'],
+    letterSpacing: ['#E65100','#FFF3E0'],
+    textTransform: ['#512DA8','#EDE7F6'],
+    textDecoration:['#C2185B','#FCE4EC']
+  };
+
+  // ─── Value helpers ────────────────────────────────────────────────────────
+  function getVal(el, prop) {
+    const cs  = window.getComputedStyle(el);
+    const key = prop.replace(/([A-Z])/g, '-$1').toLowerCase();
+    let raw   = cs.getPropertyValue(key) || cs[prop] || '';
+    if (prop === 'textDecoration') raw = raw.split(' ')[0];
+    if (prop === 'fontFamily')     raw = raw.split(',')[0].replace(/['"]/g,'').trim();
+    if (prop === 'color' && showHex) return rgbToHex(raw);
+    return raw || '—';
+  }
+
+  function rgbToHex(rgb) {
+    const m = rgb.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+    if (!m) return rgb;
+    return '#' + [m[1],m[2],m[3]].map(n => parseInt(n).toString(16).padStart(2,'0')).join('').toUpperCase();
+  }
+
+  function getAllVals(el) {
+    const cs    = window.getComputedStyle(el);
+    const color = showHex ? rgbToHex(cs.color) : cs.color;
+    return [
+      { label:'Weight',   val: cs.fontWeight },
+      { label:'Size',     val: cs.fontSize },
+      { label:'Family',   val: (cs.fontFamily||'').split(',')[0].replace(/['"]/g,'').trim() },
+      { label:'Style',    val: cs.fontStyle },
+      { label:'Color',    val: color },
+      { label:'Line H',   val: cs.lineHeight },
+      { label:'Sp',       val: cs.letterSpacing },
+      { label:'TT',       val: cs.textTransform },
+      { label:'TD',       val: cs.textDecoration.split(' ')[0] }
+    ];
+  }
+
+  // ─── Inject shared styles ─────────────────────────────────────────────────
+  function injectStyles() {
+    if (styleEl) return;
+    styleEl = document.createElement('style');
+    styleEl.id = '__fi_styles__';
+    styleEl.textContent = `
+      .__fi_host__ {
+        position: relative !important;
+      }
+      .__fi_div__ {
+        position: absolute !important;
+        top: 0 !important;
+        left: 0 !important;
+        z-index: 2147483640 !important;
+        display: inline-flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        gap: 4px !important;
+        padding: 2px 7px !important;
+        border-radius: 4px !important;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+        font-size: 10px !important;
+        font-weight: 700 !important;
+        line-height: 1.4 !important;
+        white-space: nowrap !important;
+        pointer-events: none !important;
+        letter-spacing: 0 !important;
+        text-transform: none !important;
+        text-decoration: none !important;
+        box-shadow: 0 2px 6px rgba(0,0,0,.22) !important;
+        border: 1px solid rgba(0,0,0,.08) !important;
+        cursor: default !important;
+        max-width: 200px !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+      }
+      .__fi_div__ .__fi_lbl__ {
+        display: inline-block !important;
+        opacity: .7 !important;
+        font-size: 9px !important;
+        font-weight: 600 !important;
+        text-transform: uppercase !important;
+        letter-spacing: .04em !important;
+        flex-shrink: 0 !important;
+      }
+      .__fi_outline__ {
+        outline: 1.5px dashed var(--fi-outline-color, #1A73E8) !important;
+        outline-offset: 1px !important;
+      }
+      .__fi_color_swatch__ {
+        display: inline-block !important;
+        width: 10px !important;
+        height: 10px !important;
+        border-radius: 2px !important;
+        border: 1px solid rgba(0,0,0,0.25) !important;
+        flex-shrink: 0 !important;
+        vertical-align: middle !important;
+      }
+      .__fi_tooltip__ .__fi_tt_swatch__ {
+        display: inline-block !important;
+        width: 11px !important;
+        height: 11px !important;
+        border-radius: 2px !important;
+        border: 1px solid rgba(255,255,255,0.2) !important;
+        flex-shrink: 0 !important;
+        vertical-align: middle !important;
+        margin-right: 4px !important;
+      }
+      .__fi_tooltip__ {
+        position: fixed !important;
+        z-index: 2147483647 !important;
+        background: #1e1e2e !important;
+        color: #e8eaed !important;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+        font-size: 11px !important;
+        font-weight: 400 !important;
+        line-height: 1.6 !important;
+        padding: 9px 12px !important;
+        border-radius: 9px !important;
+        box-shadow: 0 6px 24px rgba(0,0,0,.5) !important;
+        pointer-events: none !important;
+        max-width: 240px !important;
+        white-space: nowrap !important;
+        border: 1px solid #3a3a5c !important;
+        letter-spacing: 0 !important;
+        text-transform: none !important;
+        text-decoration: none !important;
+        display: none !important;
+      }
+      .__fi_tooltip__.__fi_tt_visible__ { display: block !important; }
+      .__fi_tooltip__ .__fi_tt_head__ {
+        color: #8ab4f8 !important;
+        font-weight: 700 !important;
+        display: block !important;
+        margin-bottom: 5px !important;
+        font-size: 9.5px !important;
+        text-transform: uppercase !important;
+        letter-spacing: .07em !important;
+      }
+      .__fi_tooltip__ .__fi_tt_row__ {
+        display: flex !important;
+        justify-content: space-between !important;
+        gap: 14px !important;
+        margin-top: 2px !important;
+      }
+      .__fi_tooltip__ .__fi_tt_lbl__ {
+        color: #9aa0a6 !important;
+        font-size: 10px !important;
+      }
+      .__fi_tooltip__ .__fi_tt_val__ {
+        color: #e8eaed !important;
+        font-weight: 600 !important;
+        font-size: 10.5px !important;
+      }
+    `;
+    document.head.appendChild(styleEl);
+  }
+
+  // ─── Tooltip ──────────────────────────────────────────────────────────────
+  function ensureTooltip() {
+    if (tooltip && document.body.contains(tooltip)) return;
+    tooltip = document.createElement('div');
+    tooltip.className = '__fi_tooltip__';
+    document.body.appendChild(tooltip);
+  }
+
+  function showTooltip(el, x, y) {
+    ensureTooltip();
+    const rows = showAllOnHover
+      ? getAllVals(el)
+      : [{ label: PROP_LABELS[currentProp] || currentProp, val: getVal(el, currentProp) }];
+    let html = `<span class="__fi_tt_head__">Font Inspector</span>`;
+    rows.forEach(r => {
+      const isColorRow = r.label === 'Color' || (currentProp === 'color' && !showAllOnHover);
+      const swatch = (isColorRow && r.val !== '—')
+        ? `<span class="__fi_tt_swatch__" style="background:${r.val};"></span>`
+        : '';
+      html += `<div class="__fi_tt_row__">
+        <span class="__fi_tt_lbl__">${r.label}</span>
+        <span class="__fi_tt_val__">${swatch}${r.val}</span>
+      </div>`;
+    });
+    tooltip.innerHTML = html;
+    tooltip.classList.add('__fi_tt_visible__');
+    requestAnimationFrame(() => {
+      const tw = tooltip.offsetWidth  || 220;
+      const th = tooltip.offsetHeight || 90;
+      let left = x + 14, top = y + 14;
+      if (left + tw > window.innerWidth  - 8) left = x - tw - 8;
+      if (top  + th > window.innerHeight - 8) top  = y - th - 8;
+      tooltip.style.left = left + 'px';
+      tooltip.style.top  = top  + 'px';
+    });
+  }
+
+  function hideTooltip() {
+    if (tooltip) tooltip.classList.remove('__fi_tt_visible__');
+  }
+
+  // ─── Draw layers ──────────────────────────────────────────────────────────
+  // Target: block-level and meaningful inline elements that contain text
+  const TEXT_SELECTOR = 'p, h1, h2, h3, h4, h5, h6, a, li, button, td, th, label, blockquote, figcaption, dt, dd, caption, div, span';
+
+  function drawLayers(prop) {
+    clearLayers();
+    const [fg, bg] = PROP_COLORS[prop] || ['#333', '#eee'];
+
+    document.querySelectorAll(TEXT_SELECTOR).forEach(el => {
+      // Skip our own injected elements or elements with no real text
+      if (el.closest('.__fi_div__') || !el.textContent.trim()) return;
+
+      const val = getVal(el, prop);
+      if (!val || val === '—') return;
+
+      // Save original position style and set to relative so absolute child works
+      const origPosition = el.style.position || '';
+      const computedPos  = window.getComputedStyle(el).position;
+      if (computedPos === 'static') {
+        el.style.setProperty('position', 'relative', 'important');
+      }
+      el.classList.add('__fi_outline__');
+      el.setAttribute('data-fi-outline-color', fg); // store for CSS var
+      el.style.setProperty('--fi-outline-color', fg);
+
+      // Build the <div> tag injected as first child (div works inside any element including span)
+      const span = document.createElement('div');
+      span.className = '__fi_div__';
+      span.style.cssText = `color:${fg} !important; background:${bg} !important;`;
+
+      const labelText = PROP_LABELS[prop] || prop;
+      const valText   = val.length > 26 ? val.slice(0, 24) + '…' : val;
+      const swatchHtml = (prop === 'color' && val !== '—')
+        ? `<span class="__fi_color_swatch__" style="background:${val} !important;"></span>`
+        : '';
+      span.innerHTML  = `<div class="__fi_lbl__">${labelText}</div>${swatchHtml}${valText}`;
+
+      // Insert as very first child so it sits at top-left corner of element
+      el.insertBefore(span, el.firstChild);
+
+      layers.push({ el, span, origPosition, computedPos });
+    });
+  }
+
+  function clearLayers() {
+    layers.forEach(({ el, span, origPosition, computedPos }) => {
+      // Remove injected div
+      if (span && span.parentNode === el) el.removeChild(span);
+      // Restore outline class and position
+      el.classList.remove('__fi_outline__');
+      el.removeAttribute('data-fi-outline-color');
+      el.style.removeProperty('--fi-outline-color');
+      if (computedPos === 'static') {
+        if (origPosition) {
+          el.style.position = origPosition;
+        } else {
+          el.style.removeProperty('position');
+        }
+      }
+    });
+    layers = [];
+  }
+
+  // ─── Hover listeners ──────────────────────────────────────────────────────
+  function attachHover() {
+    boundMouseMove = (e) => {
+      const el = e.target;
+      if (!el || el === tooltip || el.closest('.__fi_div__')) return;
+      const target = el.matches(TEXT_SELECTOR) ? el : el.closest(TEXT_SELECTOR);
+      if (target && !target.closest('.__fi_div__')) {
+        showTooltip(target, e.clientX, e.clientY);
+      } else {
+        hideTooltip();
+      }
+    };
+    boundMouseLeave = () => hideTooltip();
+    document.addEventListener('mousemove',  boundMouseMove,  true);
+    document.addEventListener('mouseleave', boundMouseLeave, true);
+  }
+
+  function detachHover() {
+    if (boundMouseMove)  document.removeEventListener('mousemove',  boundMouseMove,  true);
+    if (boundMouseLeave) document.removeEventListener('mouseleave', boundMouseLeave, true);
+    boundMouseMove = boundMouseLeave = null;
+    hideTooltip();
+  }
+
+  // ─── Public API ───────────────────────────────────────────────────────────
+  function activate(prop, allOnHover, hexColor, hoverOnlyMode) {
+    currentProp    = prop;
+    showAllOnHover = allOnHover;
+    showHex        = hexColor;
+    injectStyles();
+    ensureTooltip();
+    detachHover();
+    if (hoverOnlyMode) {
+      // Hover-only mode: no overlay labels on elements, just tooltip on hover
+      clearLayers();
+    } else {
+      drawLayers(prop);
+    }
+    attachHover();
+  }
+
+  function remove() {
+    detachHover();
+    clearLayers();
+    if (tooltip  && tooltip.parentNode)  { tooltip.remove();  tooltip  = null; }
+    if (styleEl  && styleEl.parentNode)  { styleEl.remove();  styleEl  = null; }
+    currentProp = null;
+  }
+
+  return { activate, remove };
+})();
+
+} // end __FontInspectorLoaded guard
