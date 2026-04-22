@@ -309,6 +309,19 @@ let _schemaPretty = new Map();   // idx → pretty JSON string (avoids large dat
     }
     .kw-toolbar { display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: var(--card); border-bottom: 1px solid var(--border); }
     .kw-stats { display: flex; gap: 10px; padding: 7px 12px 6px; background: var(--bg); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+    /* N-gram tab switcher */
+    .kw-ngram-tabs {
+      display: flex; gap: 4px; padding: 6px 12px;
+      background: var(--card); border-bottom: 1px solid var(--border);
+      transition: background .25s, border-color .25s;
+    }
+    .kw-ngram-btn {
+      padding: 4px 14px; border-radius: 16px; font-size: 11px; font-weight: 700;
+      cursor: pointer; font-family: inherit; border: 1.5px solid var(--border);
+      background: var(--bg); color: var(--t3); transition: all .15s;
+    }
+    .kw-ngram-btn:hover  { border-color: var(--blue); color: var(--blue); }
+    .kw-ngram-btn.active { background: var(--blue); border-color: var(--blue); color: #fff; }
     .kw-stat { font-size: 10.5px; color: var(--t3); }
     .kw-stat strong { color: var(--t1); font-weight: 800; }
     .kw-export-row { display: flex; gap: 6px; padding: 7px 12px; background: var(--card); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
@@ -1890,32 +1903,48 @@ function downloadBlob(content, type, filename) {
 }
 
 // ── Keywords Tab ──────────────────────────────────────────────────────────────
-let _kwData      = [];   // full keyword array
+let _kwData      = [];   // active dataset (1/2/3-word based on active tab)
 let _kwFiltered  = [];   // after search filter
-let _kwSortCol   = '#';  // current sort column
-let _kwSortAsc   = false;// sort direction
+let _kwSortCol   = '#';
+let _kwSortAsc   = false;
+let _kwAllData   = {};   // { uni, bi, tri } — all datasets from OV
+
+// Over-optimisation density thresholds
+const KW_WARN = { uni: 3.0, bi: 2.0, tri: 1.5 };
 
 function renderOvKeywords(OV) {
-  const el  = document.getElementById('ovKeywordsContent');
-  _kwData   = OV.keywords || [];
+  const el = document.getElementById('ovKeywordsContent');
+  _kwAllData = {
+    uni: OV.keywords  || [],
+    bi:  OV.bigrams   || [],
+    tri: OV.trigrams  || [],
+  };
   const totalWords = OV.totalWordCount || 0;
 
-  if (!_kwData.length) {
+  if (!_kwAllData.uni.length && !_kwAllData.bi.length && !_kwAllData.tri.length) {
     el.innerHTML = `<div class="ov-empty" style="padding:32px;">
       <div class="ov-empty-icon">🔤</div>
       <div class="ov-empty-text">No keywords extracted</div>
-      <div class="ov-empty-sub">Page has insufficient visible text content (min. 2 occurrences per word).</div>
+      <div class="ov-empty-sub">Page has insufficient visible text (min. 2 occurrences).</div>
     </div>`;
     return;
   }
 
   el.innerHTML = `
-    <!-- Stats -->
+    <!-- Stats bar -->
     <div class="kw-stats">
-      <span class="kw-stat"><strong>${_kwData.length}</strong> keywords</span>
       <span class="kw-stat"><strong>${totalWords.toLocaleString()}</strong> total words</span>
+      <span class="kw-stat"><strong>${_kwAllData.uni.length}</strong> 1-word</span>
+      <span class="kw-stat"><strong>${_kwAllData.bi.length}</strong> 2-word</span>
+      <span class="kw-stat"><strong>${_kwAllData.tri.length}</strong> 3-word</span>
     </div>
-    <!-- Search + Download in one toolbar row -->
+    <!-- N-gram tab switcher -->
+    <div class="kw-ngram-tabs">
+      <button class="kw-ngram-btn active" data-ng="uni">1-Word</button>
+      <button class="kw-ngram-btn" data-ng="bi">2-Word</button>
+      <button class="kw-ngram-btn" data-ng="tri">3-Word</button>
+    </div>
+    <!-- Search + Download toolbar -->
     <div class="kw-toolbar">
       <input class="ov-search" id="kwSearch" placeholder="Search keywords…" type="text">
       <div class="kw-dl-wrap" id="kwDlWrap">
@@ -1931,11 +1960,11 @@ function renderOvKeywords(OV) {
         <thead>
           <tr>
             <th data-col="#">#</th>
-            <th data-col="word">Keyword</th>
+            <th data-col="word" id="kwColPhrase">Keyword</th>
             <th data-col="count">Count</th>
             <th data-col="density">Density</th>
-            <th data-col="bold">Bold</th>
-            <th data-col="italic">Italic</th>
+            <th data-col="bold" id="kwColBold">Bold</th>
+            <th data-col="italic" id="kwColItalic">Italic</th>
             <th data-col="prominence">Prominence</th>
           </tr>
         </thead>
@@ -1943,11 +1972,42 @@ function renderOvKeywords(OV) {
       </table>
     </div>`;
 
+  // Load initial unigram data
+  _kwData     = [..._kwAllData.uni];
   _kwFiltered = [..._kwData];
   _kwSortCol  = '#';
   _kwSortAsc  = false;
-  renderKwTable(el);
+  let _activeNg = 'uni';
+  renderKwTable(el, 'uni');
   updateKwSortHeaders(el);
+
+  // N-gram tab switching
+  el.querySelectorAll('.kw-ngram-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      el.querySelectorAll('.kw-ngram-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      _activeNg = btn.dataset.ng;
+      _kwData     = [..._kwAllData[_activeNg]];
+      _kwFiltered = [..._kwData];
+      _kwSortCol  = '#';
+      _kwSortAsc  = false;
+
+      // Update column labels for phrase tabs (hide Bold/Italic for bi/tri)
+      const boldCol   = el.querySelector('#kwColBold');
+      const italicCol = el.querySelector('#kwColItalic');
+      const phraseCol = el.querySelector('#kwColPhrase');
+      if (phraseCol) phraseCol.textContent = _activeNg === 'uni' ? 'Keyword' : (_activeNg === 'bi' ? '2-Word Phrase' : '3-Word Phrase');
+      if (boldCol)   boldCol.style.display   = _activeNg === 'uni' ? '' : 'none';
+      if (italicCol) italicCol.style.display = _activeNg === 'uni' ? '' : 'none';
+
+      // Clear search
+      const searchEl = el.querySelector('#kwSearch');
+      if (searchEl) searchEl.value = '';
+
+      renderKwTable(el, _activeNg);
+      updateKwSortHeaders(el);
+    });
+  });
 
   // Sort on header click
   el.querySelectorAll('.kw-table th').forEach(th => {
@@ -1956,7 +2016,7 @@ function renderOvKeywords(OV) {
       if (_kwSortCol === col) { _kwSortAsc = !_kwSortAsc; }
       else { _kwSortCol = col; _kwSortAsc = col === 'word'; }
       sortKwData();
-      renderKwTable(el);
+      renderKwTable(el, _activeNg);
       updateKwSortHeaders(el);
     });
   });
@@ -1966,7 +2026,7 @@ function renderOvKeywords(OV) {
     const q = e.target.value.toLowerCase().trim();
     _kwFiltered = q ? _kwData.filter(k => k.word.includes(q)) : [..._kwData];
     sortKwData();
-    renderKwTable(el);
+    renderKwTable(el, _activeNg);
   });
 
   // Download dropdown
@@ -1986,23 +2046,26 @@ function renderOvKeywords(OV) {
 
     menu.querySelectorAll('.kw-dl-menu-item').forEach(item => {
       item.addEventListener('click', () => {
-        const fmt = item.dataset.fmt;
+        const fmt      = item.dataset.fmt;
+        const label    = _activeNg === 'uni' ? '1word' : _activeNg === 'bi' ? '2word' : '3word';
+        const isUni    = _activeNg === 'uni';
         if (fmt === 'csv') {
-          const rows = [['#','Keyword','Count','Density %','Bold','Italic','Prominence']];
-          _kwData.forEach((k, i) => rows.push([i+1, k.word, k.count, k.density, k.bold?'Yes':'No', k.italic?'Yes':'No', k.prominence]));
-          const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
-          downloadBlob(csv, 'text/csv', 'keywords.csv');
+          const hdrs = isUni
+            ? ['#','Keyword','Count','Density %','Bold','Italic','Prominence']
+            : ['#','Phrase','Count','Density %','Prominence'];
+          const rows = [hdrs, ..._kwData.map((k, i) => isUni
+            ? [i+1, k.word, k.count, k.density, k.bold?'Yes':'No', k.italic?'Yes':'No', k.prominence]
+            : [i+1, k.word, k.count, k.density, k.prominence])];
+          downloadBlob(rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n'), 'text/csv', `keywords-${label}.csv`);
         } else if (fmt === 'json') {
-          downloadBlob(JSON.stringify(_kwData.map((k,i)=>({rank:i+1,...k})),null,2), 'application/json', 'keywords.json');
+          downloadBlob(JSON.stringify(_kwData.map((k,i)=>({rank:i+1,...k})),null,2), 'application/json', `keywords-${label}.json`);
         } else {
-          const txt = _kwData.map((k,i)=>`${i+1}. ${k.word} (${k.count}x, ${k.density}%)`).join('\n');
-          downloadBlob(txt, 'text/plain', 'keywords.txt');
+          downloadBlob(_kwData.map((k,i)=>`${i+1}. ${k.word} (${k.count}x, ${k.density}%)`).join('\n'), 'text/plain', `keywords-${label}.txt`);
         }
         menu.remove();
       });
     });
 
-    // Close on outside click
     const close = () => { menu.remove(); document.removeEventListener('click', close); };
     setTimeout(() => document.addEventListener('click', close), 10);
   });
@@ -2012,14 +2075,14 @@ function sortKwData() {
   _kwFiltered.sort((a, b) => {
     let va, vb;
     switch (_kwSortCol) {
-      case '#':           va = _kwData.indexOf(a); vb = _kwData.indexOf(b); break;
-      case 'word':        va = a.word;         vb = b.word;         break;
-      case 'count':       va = a.count;        vb = b.count;        break;
-      case 'density':     va = a.density;      vb = b.density;      break;
-      case 'bold':        va = a.bold?1:0;     vb = b.bold?1:0;     break;
-      case 'italic':      va = a.italic?1:0;   vb = b.italic?1:0;   break;
-      case 'prominence':  va = a.prominence;   vb = b.prominence;   break;
-      default:            va = 0; vb = 0;
+      case '#':          va = _kwData.indexOf(a); vb = _kwData.indexOf(b); break;
+      case 'word':       va = a.word;       vb = b.word;       break;
+      case 'count':      va = a.count;      vb = b.count;      break;
+      case 'density':    va = a.density;    vb = b.density;    break;
+      case 'bold':       va = a.bold?1:0;   vb = b.bold?1:0;   break;
+      case 'italic':     va = a.italic?1:0; vb = b.italic?1:0; break;
+      case 'prominence': va = a.prominence; vb = b.prominence; break;
+      default:           va = 0; vb = 0;
     }
     if (va < vb) return _kwSortAsc ? -1 : 1;
     if (va > vb) return _kwSortAsc ? 1 : -1;
@@ -2027,41 +2090,58 @@ function sortKwData() {
   });
 }
 
-function renderKwTable(el) {
-  const tbody = el.querySelector('#kwTbody');
+function renderKwTable(el, ngType) {
+  const tbody   = el.querySelector('#kwTbody');
   if (!tbody) return;
+  const isUni   = ngType === 'uni';
+  const warnPct = KW_WARN[ngType] || 3.0;
+  const limit   = ngType === 'tri' ? 100 : 200;
 
-  const promDots = (p) => {
-    const max = 5; // max prominence score per threshold
+  const promDots = p => {
     const filled = Math.min(Math.round((p / 14) * 5), 5);
     return `<div class="prom-dots">${Array.from({length:5},(_,i)=>`<div class="prom-dot${i<filled?' on':''}"></div>`).join('')}</div>`;
   };
 
-  tbody.innerHTML = _kwFiltered.slice(0, 200).map((k, i) => {
-    const origRank = _kwData.indexOf(k) + 1;
-    return `<tr>
-      <td>${origRank}</td>
-      <td><span class="kw-word">${esc(k.word)}</span></td>
-      <td>${k.count}</td>
-      <td><span class="kw-density">${k.density}%</span></td>
-      <td><span class="kw-badge ${k.bold?'yes-b':'no'}">${k.bold?'B':'–'}</span></td>
-      <td><span class="kw-badge ${k.italic?'yes-i':'no'}">${k.italic?'I':'–'}</span></td>
-      <td>${promDots(k.prominence)}</td>
-    </tr>`;
+  tbody.innerHTML = _kwFiltered.slice(0, limit).map(k => {
+    const origRank    = _kwData.indexOf(k) + 1;
+    const isOverOpt   = k.density >= warnPct;
+    const densityCell = isOverOpt
+      ? `<span class="kw-density" style="color:var(--orange);font-weight:800;" title="⚠ Possible over-optimisation (>${warnPct}%)">${k.density}% ⚠</span>`
+      : `<span class="kw-density">${k.density}%</span>`;
+
+    if (isUni) {
+      return `<tr ${isOverOpt ? 'style="background:var(--orange-lt);"' : ''}>
+        <td>${origRank}</td>
+        <td><span class="kw-word">${esc(k.word)}</span></td>
+        <td>${k.count}</td>
+        <td>${densityCell}</td>
+        <td><span class="kw-badge ${k.bold?'yes-b':'no'}">${k.bold?'B':'–'}</span></td>
+        <td><span class="kw-badge ${k.italic?'yes-i':'no'}">${k.italic?'I':'–'}</span></td>
+        <td>${promDots(k.prominence)}</td>
+      </tr>`;
+    } else {
+      return `<tr ${isOverOpt ? 'style="background:var(--orange-lt);"' : ''}>
+        <td>${origRank}</td>
+        <td><span class="kw-word">${esc(k.word)}</span></td>
+        <td>${k.count}</td>
+        <td>${densityCell}</td>
+        <td style="display:none"></td>
+        <td style="display:none"></td>
+        <td>${promDots(k.prominence)}</td>
+      </tr>`;
+    }
   }).join('');
 
-  if (_kwFiltered.length > 200) {
+  if (_kwFiltered.length > limit) {
     tbody.insertAdjacentHTML('beforeend',
-      `<tr><td colspan="7" style="text-align:center;color:var(--t4);font-size:10px;padding:8px;">Showing 200 of ${_kwFiltered.length} keywords</td></tr>`);
+      `<tr><td colspan="7" style="text-align:center;color:var(--t4);font-size:10px;padding:8px;">Showing ${limit} of ${_kwFiltered.length}</td></tr>`);
   }
 }
 
 function updateKwSortHeaders(el) {
   el.querySelectorAll('.kw-table th').forEach(th => {
     th.classList.remove('sort-asc','sort-desc');
-    if (th.dataset.col === _kwSortCol) {
-      th.classList.add(_kwSortAsc ? 'sort-asc' : 'sort-desc');
-    }
+    if (th.dataset.col === _kwSortCol) th.classList.add(_kwSortAsc ? 'sort-asc' : 'sort-desc');
   });
 }
 

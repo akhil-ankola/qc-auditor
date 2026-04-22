@@ -379,14 +379,22 @@ if (!window.__qcAuditorLoaded) {
       'http','https','nbsp','amp','quot','lt','gt','amp','copy','reg'
     ]);
 
-    const kwMap    = new Map(); // word → {count, bold, italic}
-    let totalWords = 0;
+    const kwMap     = new Map(); // word → {count, bold, italic}
+    const biMap     = new Map(); // "w1 w2" → count
+    const triMap    = new Map(); // "w1 w2 w3" → count
+    let totalWords  = 0;
 
-    // Collect prominence signals
-    const titleWords    = new Set((document.title || '').toLowerCase().match(/[a-z]{3,}/g) || []);
-    const h1Words       = new Set([...document.querySelectorAll('h1')].join(' ').toLowerCase().match(/[a-z]{3,}/g) || []);
-    const h2Words       = new Set([...document.querySelectorAll('h2')].map(h => h.textContent).join(' ').toLowerCase().match(/[a-z]{3,}/g) || []);
-    const metaDescWords = new Set((document.querySelector('meta[name="description"]')?.getAttribute('content') || '').toLowerCase().match(/[a-z]{3,}/g) || []);
+    // Prominence phrase sets (for bigram/trigram prominence)
+    const titleText    = (document.title || '').toLowerCase();
+    const h1Text       = [...document.querySelectorAll('h1')].map(h => h.textContent).join(' ').toLowerCase();
+    const h2Text       = [...document.querySelectorAll('h2')].map(h => h.textContent).join(' ').toLowerCase();
+    const metaDescText = (document.querySelector('meta[name="description"]')?.getAttribute('content') || '').toLowerCase();
+
+    // Collect prominence signals (for unigrams)
+    const titleWords    = new Set(titleText.match(/[a-z]{3,}/g) || []);
+    const h1Words       = new Set(h1Text.match(/[a-z]{3,}/g) || []);
+    const h2Words       = new Set(h2Text.match(/[a-z]{3,}/g) || []);
+    const metaDescWords = new Set(metaDescText.match(/[a-z]{3,}/g) || []);
 
     // Walk visible text nodes
     const walker = document.createTreeWalker(
@@ -410,17 +418,17 @@ if (!window.__qcAuditorLoaded) {
       if (!words.length) continue;
       totalWords += words.length;
 
-      // Check if this text node is inside bold / italic
+      // Check bold / italic context
       let el = node.parentElement;
-      let isBold   = false;
-      let isItalic = false;
+      let isBold = false, isItalic = false;
       while (el && el !== document.body) {
         const tag = el.tagName?.toLowerCase();
-        if (tag === 'strong' || tag === 'b') isBold = true;
-        if (tag === 'em' || tag === 'i')     isItalic = true;
+        if (tag === 'strong' || tag === 'b') isBold   = true;
+        if (tag === 'em'     || tag === 'i') isItalic = true;
         el = el.parentElement;
       }
 
+      // ── Unigrams ──────────────────────────────────────────────────
       words.forEach(word => {
         if (STOP_WORDS.has(word) || word.length < 3) return;
         if (!kwMap.has(word)) kwMap.set(word, { count: 0, bold: false, italic: false });
@@ -429,9 +437,27 @@ if (!window.__qcAuditorLoaded) {
         if (isBold)   kw.bold   = true;
         if (isItalic) kw.italic = true;
       });
+
+      // ── Bigrams — sliding window, skip all-stopword pairs ─────────
+      for (let i = 0; i < words.length - 1; i++) {
+        const w1 = words[i], w2 = words[i + 1];
+        if (STOP_WORDS.has(w1) && STOP_WORDS.has(w2)) continue;
+        if (w1.length < 3 || w2.length < 3) continue;
+        const phrase = w1 + ' ' + w2;
+        biMap.set(phrase, (biMap.get(phrase) || 0) + 1);
+      }
+
+      // ── Trigrams — sliding window, skip all-stopword triples ──────
+      for (let i = 0; i < words.length - 2; i++) {
+        const w1 = words[i], w2 = words[i + 1], w3 = words[i + 2];
+        if (STOP_WORDS.has(w1) && STOP_WORDS.has(w2) && STOP_WORDS.has(w3)) continue;
+        if (w1.length < 3 || w2.length < 3 || w3.length < 3) continue;
+        const phrase = w1 + ' ' + w2 + ' ' + w3;
+        triMap.set(phrase, (triMap.get(phrase) || 0) + 1);
+      }
     }
 
-    // Build keyword list with prominence
+    // ── Build unigram list ─────────────────────────────────────────
     ov.keywords = [...kwMap.entries()]
       .filter(([, v]) => v.count >= 2)
       .map(([word, v]) => {
@@ -451,6 +477,37 @@ if (!window.__qcAuditorLoaded) {
       })
       .sort((a, b) => b.count - a.count)
       .slice(0, 200);
+
+    // ── Build bigram list ──────────────────────────────────────────
+    const biProminence = phrase => {
+      let p = 0;
+      if (titleText.includes(phrase))    p += 5;
+      if (h1Text.includes(phrase))       p += 4;
+      if (h2Text.includes(phrase))       p += 3;
+      if (metaDescText.includes(phrase)) p += 2;
+      return p;
+    };
+
+    ov.bigrams = [...biMap.entries()]
+      .filter(([, c]) => c >= 2)
+      .map(([phrase, count]) => ({
+        word: phrase, count,
+        density:    totalWords > 0 ? +((count / (totalWords - 1)) * 100).toFixed(2) : 0,
+        prominence: biProminence(phrase)
+      }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 150);
+
+    // ── Build trigram list ─────────────────────────────────────────
+    ov.trigrams = [...triMap.entries()]
+      .filter(([, c]) => c >= 2)
+      .map(([phrase, count]) => ({
+        word: phrase, count,
+        density:    totalWords > 0 ? +((count / (totalWords - 2)) * 100).toFixed(2) : 0,
+        prominence: biProminence(phrase)
+      }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 100);
 
     ov.totalWordCount = totalWords;
 
@@ -651,7 +708,7 @@ window.FontInspector = (() => {
         position: absolute !important;
         top: 0 !important;
         left: 0 !important;
-        z-index: 2147483640 !important;
+        z-index: 1 !important;
         display: inline-flex !important;
         flex-direction: row !important;
         align-items: center !important;
@@ -797,67 +854,103 @@ window.FontInspector = (() => {
     if (tooltip) tooltip.classList.remove('__fi_tt_visible__');
   }
 
-  // ─── Draw layers ──────────────────────────────────────────────────────────
-  // Target: block-level and meaningful inline elements that contain text
+  // ─── Draw layers — viewport-only via IntersectionObserver ────────────────
   const TEXT_SELECTOR = 'p, h1, h2, h3, h4, h5, h6, a, li, button, td, th, label, blockquote, figcaption, dt, dd, caption, div, span';
+
+  let _fiObserver  = null;  // IntersectionObserver instance
+  let _fiProp      = null;  // current active property
+  let _fiFg        = '#333';
+  let _fiBg        = '#eee';
+  // Map from element → { origPosition, computedPos } for cleanup
+  const _fiMeta    = new Map();
+
+  function makeBadge(el) {
+    const val = getVal(el, _fiProp);
+    if (!val || val === '—') return null;
+
+    const span = document.createElement('div');
+    span.className = '__fi_div__';
+    span.style.cssText = `color:${_fiFg} !important; background:${_fiBg} !important;`;
+    const labelText  = PROP_LABELS[_fiProp] || _fiProp;
+    const valText    = val.length > 26 ? val.slice(0, 24) + '…' : val;
+    const swatchHtml = (_fiProp === 'color' && val !== '—')
+      ? `<span class="__fi_color_swatch__" style="background:${val} !important;"></span>` : '';
+    span.innerHTML = `<div class="__fi_lbl__">${labelText}</div>${swatchHtml}${valText}`;
+    return span;
+  }
+
+  function showBadge(el) {
+    // Already has a badge
+    if (el.querySelector(':scope > .__fi_div__')) return;
+    const span = makeBadge(el);
+    if (!span) return;
+    el.insertBefore(span, el.firstChild);
+  }
+
+  function hideBadge(el) {
+    const span = el.querySelector(':scope > .__fi_div__');
+    if (span) el.removeChild(span);
+  }
 
   function drawLayers(prop) {
     clearLayers();
-    const [fg, bg] = PROP_COLORS[prop] || ['#333', '#eee'];
+    _fiProp = prop;
+    [_fiFg, _fiBg] = PROP_COLORS[prop] || ['#333', '#eee'];
 
+    // Collect candidate elements and prepare them (outline + position)
+    const candidates = [];
     document.querySelectorAll(TEXT_SELECTOR).forEach(el => {
-      // Skip our own injected elements or elements with no real text
       if (el.closest('.__fi_div__') || !el.textContent.trim()) return;
-
       const val = getVal(el, prop);
       if (!val || val === '—') return;
 
-      // Save original position style and set to relative so absolute child works
       const origPosition = el.style.position || '';
       const computedPos  = window.getComputedStyle(el).position;
       if (computedPos === 'static') {
         el.style.setProperty('position', 'relative', 'important');
       }
       el.classList.add('__fi_outline__');
-      el.setAttribute('data-fi-outline-color', fg); // store for CSS var
-      el.style.setProperty('--fi-outline-color', fg);
-
-      // Build the <div> tag injected as first child (div works inside any element including span)
-      const span = document.createElement('div');
-      span.className = '__fi_div__';
-      span.style.cssText = `color:${fg} !important; background:${bg} !important;`;
-
-      const labelText = PROP_LABELS[prop] || prop;
-      const valText   = val.length > 26 ? val.slice(0, 24) + '…' : val;
-      const swatchHtml = (prop === 'color' && val !== '—')
-        ? `<span class="__fi_color_swatch__" style="background:${val} !important;"></span>`
-        : '';
-      span.innerHTML  = `<div class="__fi_lbl__">${labelText}</div>${swatchHtml}${valText}`;
-
-      // Insert as very first child so it sits at top-left corner of element
-      el.insertBefore(span, el.firstChild);
-
-      layers.push({ el, span, origPosition, computedPos });
+      el.style.setProperty('--fi-outline-color', _fiFg);
+      _fiMeta.set(el, { origPosition, computedPos });
+      candidates.push(el);
+      layers.push({ el });
     });
+
+    if (!candidates.length) return;
+
+    // IntersectionObserver: show badge when in viewport, hide when out
+    _fiObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) showBadge(entry.target);
+        else                      hideBadge(entry.target);
+      });
+    }, {
+      rootMargin: '100px 0px 100px 0px', // 100px lookahead above/below
+      threshold:  0
+    });
+
+    candidates.forEach(el => _fiObserver.observe(el));
   }
 
   function clearLayers() {
-    layers.forEach(({ el, span, origPosition, computedPos }) => {
-      // Remove injected div
-      if (span && span.parentNode === el) el.removeChild(span);
-      // Restore outline class and position
+    // Stop observing
+    if (_fiObserver) { _fiObserver.disconnect(); _fiObserver = null; }
+
+    layers.forEach(({ el }) => {
+      hideBadge(el);
       el.classList.remove('__fi_outline__');
-      el.removeAttribute('data-fi-outline-color');
       el.style.removeProperty('--fi-outline-color');
-      if (computedPos === 'static') {
-        if (origPosition) {
-          el.style.position = origPosition;
-        } else {
-          el.style.removeProperty('position');
+      const meta = _fiMeta.get(el);
+      if (meta) {
+        if (meta.computedPos === 'static') {
+          if (meta.origPosition) el.style.position = meta.origPosition;
+          else el.style.removeProperty('position');
         }
+        _fiMeta.delete(el);
       }
     });
-    layers = [];
+    layers  = [];
+    _fiProp = null;
   }
 
   // ─── Hover listeners ──────────────────────────────────────────────────────
