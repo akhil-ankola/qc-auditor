@@ -1,9 +1,9 @@
-// QC Auditor v2.0 — Background Service Worker (MV3)
+// PagePulse v2.5.3 — Background Service Worker (MV3)
 
 chrome.runtime.onInstalled.addListener(({ reason }) => {
   // Set default storage values on first install
   if (reason === 'install') {
-    chrome.storage.local.set({ darkMode: undefined });
+    chrome.storage.local.set({ darkMode: null });
   }
 });
 

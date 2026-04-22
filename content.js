@@ -1,4 +1,4 @@
-// content.js — QC Auditor v2.0  |  Phase 3: Broken Images + full audit
+// content.js — PagePulse v2.5.3  |  Phase 3: Broken Images + full audit
 if (!window.__qcAuditorLoaded) {
   window.__qcAuditorLoaded = true;
 
@@ -520,7 +520,7 @@ if (!window.__qcAuditorLoaded) {
     // Helper: extract first regex match from all script content
     const extract = (regex) => { const m = fullText.match(regex); return m ? m[1] || m[0] : null; };
     const hasSrc  = (str) => scripts.some(s => s.includes(str));
-    const hasGlobal = (g) => { try { return typeof eval(`window.${g}`) !== 'undefined'; } catch(e) { return false; } };
+    const hasGlobal = (g) => { try { return typeof window[g] !== 'undefined'; } catch(e) { return false; } };
 
     // GTM — extract container ID (GTM-XXXXX)
     const gtmId = extract(/GTM-[A-Z0-9]+/) ||

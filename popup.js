@@ -1575,10 +1575,12 @@ function renderOvLinks(OV) {
 }
 
 function loadMoreLinks(btn) {
+  const container = document.getElementById('linkListContainer');
+  if (!container) return;
   const offset    = parseInt(btn.dataset.offset);
   const next      = _linksAll.slice(offset, offset + LINK_PAGE);
   const remaining = _linksAll.length - offset - LINK_PAGE;
-  document.getElementById('linkListContainer').insertAdjacentHTML('beforeend', next.map(_linkItemFn).join(''));
+  container.insertAdjacentHTML('beforeend', next.map(_linkItemFn).join(''));
   if (remaining > 0) { btn.dataset.offset = offset + LINK_PAGE; btn.textContent = `Load More — ${remaining} remaining`; }
   else { btn.remove(); }
 }
