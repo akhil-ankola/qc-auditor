@@ -901,6 +901,11 @@ window.FontInspector = (() => {
     const candidates = [];
     document.querySelectorAll(TEXT_SELECTOR).forEach(el => {
       if (el.closest('.__fi_div__') || !el.textContent.trim()) return;
+      // Only apply to elements that directly contain text (have at least one non-empty text node child)
+      const hasDirectText = Array.from(el.childNodes).some(
+        n => n.nodeType === Node.TEXT_NODE && n.textContent.trim().length > 0
+      );
+      if (!hasDirectText) return;
       const val = getVal(el, prop);
       if (!val || val === '—') return;
 
@@ -958,7 +963,14 @@ window.FontInspector = (() => {
     boundMouseMove = (e) => {
       const el = e.target;
       if (!el || el === tooltip || el.closest('.__fi_div__')) return;
-      const target = el.matches(TEXT_SELECTOR) ? el : el.closest(TEXT_SELECTOR);
+      let target = el.matches(TEXT_SELECTOR) ? el : el.closest(TEXT_SELECTOR);
+      // Only show tooltip on elements that directly contain text
+      if (target) {
+        const hasDirectText = Array.from(target.childNodes).some(
+          n => n.nodeType === Node.TEXT_NODE && n.textContent.trim().length > 0
+        );
+        if (!hasDirectText) target = null;
+      }
       if (target && !target.closest('.__fi_div__')) {
         showTooltip(target, e.clientX, e.clientY);
       } else {
