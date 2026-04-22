@@ -1143,6 +1143,9 @@ function copyToClipboard(text, btn) {
 function copyIconSVG() {
   return `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
 }
+function downloadIconSVG() {
+  return `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
+}
 
 // ── Images (with Broken section + Load More) ──────────────────────────────────
 
@@ -1177,6 +1180,7 @@ function renderOvImages(OV) {
       <div class="ov-img-info">
         ${img.broken ? '<span class="ov-img-broken-badge">⚠ 404 / Broken</span>' : ''}
         <div style="display:flex;align-items:center;gap:5px;margin-bottom:3px;">
+          ${img.src && !img.broken ? `<button class="ov-copy-btn img-dl-btn" data-src="${esc(img.src)}" data-filename="${esc(img.filename)}" title="Download image">${downloadIconSVG()}</button>` : ''}
           <button class="ov-copy-btn" data-copy="${esc(img.src)}" title="Copy URL">${copyIconSVG()}</button>
           <span class="ov-img-filename" title="${esc(img.src)}">${esc(img.filename)}</span>
           ${img.format && img.format !== 'OTHER' ? `<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:4px;background:var(--border2);color:var(--t3);">${img.format}</span>` : ''}
@@ -1217,12 +1221,16 @@ function renderOvImages(OV) {
     </div>
     <!-- Format pills -->
     ${fmtPills ? `<div class="ov-fmt-bar"><span style="font-size:10px;font-weight:700;color:var(--t4);margin-right:2px;">Formats:</span>${fmtPills}</div>` : ''}
-    <!-- Toolbar: search + download -->
+    <!-- Toolbar: search + download ZIP + copy all -->
     <div class="ov-toolbar">
       <input class="ov-search" id="imgSearch" placeholder="Search by filename…" type="text">
-      <button class="ov-export-btn green" id="btnDownloadImgs">
+      <button class="ov-export-btn green" id="btnDownloadImgs" title="Download all images as ZIP">
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         Download All
+      </button>
+      <button class="ov-export-btn" id="btnCopyAllImgUrls" title="Copy all image URLs to clipboard" style="background:var(--card);color:var(--t2);border:1.5px solid var(--border);">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        Copy URLs
       </button>
     </div>
     <!-- Lists -->
@@ -1274,10 +1282,86 @@ function renderOvImages(OV) {
     applyImgFilters(el, imgs);
   });
 
-  // Download All
-  el.querySelector('#btnDownloadImgs').addEventListener('click', () => {
+  // Download All as ZIP
+  el.querySelector('#btnDownloadImgs').addEventListener('click', async () => {
     const urls = imgs.map(i => i.src).filter(Boolean);
-    downloadBlob(urls.join('\n'), 'text/plain', `images-${location.hostname||'page'}.txt`);
+    if (!urls.length) return;
+
+    const btn = el.querySelector('#btnDownloadImgs');
+    const origHTML = btn.innerHTML;
+    btn.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Zipping…`;
+    btn.disabled = true;
+
+    try {
+      await downloadImagesAsZip(urls, `images-${location.hostname||'page'}`);
+    } catch (e) {
+      // Fallback: download as text list if fetch fails
+      downloadBlob(urls.join('\n'), 'text/plain', `images-${location.hostname||'page'}.txt`);
+    }
+
+    btn.innerHTML = origHTML;
+    btn.disabled  = false;
+  });
+
+  // Copy All image URLs
+  el.querySelector('#btnCopyAllImgUrls').addEventListener('click', (e) => {
+    const btn  = e.currentTarget;
+    const urls = imgs.map(i => i.src).filter(Boolean).join('\n');
+    navigator.clipboard.writeText(urls).then(() => {
+      const orig = btn.innerHTML;
+      btn.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Copied!`;
+      btn.style.color = 'var(--green)';
+      btn.style.borderColor = 'var(--green)';
+      setTimeout(() => {
+        btn.innerHTML = orig;
+        btn.style.color = '';
+        btn.style.borderColor = '';
+      }, 1500);
+    });
+  });
+
+  // Per-image download buttons (delegated)
+  el.addEventListener('click', async (e) => {
+    const dlBtn = e.target.closest('.img-dl-btn');
+    if (!dlBtn) return;
+    const src      = dlBtn.dataset.src;
+    const filename = dlBtn.dataset.filename || src.split('/').pop() || 'image';
+    if (!src) return;
+
+    const origHTML = dlBtn.innerHTML;
+    dlBtn.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
+    dlBtn.disabled = true;
+
+    try {
+      const resp = await fetch(src);
+      if (!resp.ok) throw new Error('fetch failed');
+      const data = new Uint8Array(await resp.arrayBuffer());
+
+      // Ensure correct extension
+      const KNOWN_EXTS = /\.(jpg|jpeg|png|webp|gif|svg|avif|bmp|tiff|ico)$/i;
+      let fname = filename;
+      if (!KNOWN_EXTS.test(fname)) {
+        const MIME_EXT = {'image/jpeg':'.jpg','image/png':'.png','image/webp':'.webp','image/gif':'.gif','image/svg+xml':'.svg','image/avif':'.avif','image/bmp':'.bmp','image/x-icon':'.ico'};
+        const mime  = (resp.headers.get('Content-Type') || '').split(';')[0].trim().toLowerCase();
+        const ext   = MIME_EXT[mime] || detectExtFromBytes(data) || '.jpg';
+        const dot   = fname.lastIndexOf('.');
+        const base  = dot > 0 && dot > fname.length - 8 ? fname.slice(0, dot) : fname;
+        fname = base + ext;
+      }
+
+      const blob = new Blob([data]);
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href = url; a.download = fname; a.click();
+      URL.revokeObjectURL(url);
+      dlBtn.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+      setTimeout(() => { dlBtn.innerHTML = origHTML; dlBtn.disabled = false; }, 1500);
+    } catch (_) {
+      // Fallback: open in new tab
+      window.open(src, '_blank', 'noopener');
+      dlBtn.innerHTML = origHTML;
+      dlBtn.disabled = false;
+    }
   });
 }
 
@@ -1675,6 +1759,125 @@ function renderOvTech(OV) {
     const btn = e.target.closest('.ov-copy-btn[data-copy]');
     if (btn) copyToClipboard(btn.dataset.copy, btn);
   });
+}
+
+
+// ── ZIP builder (pure JS, no library) ────────────────────────────────────────
+async function downloadImagesAsZip(urls, zipName) {
+  const MAX = 4;
+  const entries = [];
+
+  // MIME type → file extension map
+  const MIME_EXT = {
+    'image/jpeg':      '.jpg',
+    'image/jpg':       '.jpg',
+    'image/png':       '.png',
+    'image/webp':      '.webp',
+    'image/gif':       '.gif',
+    'image/svg+xml':   '.svg',
+    'image/avif':      '.avif',
+    'image/bmp':       '.bmp',
+    'image/tiff':      '.tiff',
+    'image/ico':       '.ico',
+    'image/x-icon':    '.ico',
+  };
+
+  for (let i = 0; i < urls.length; i += MAX) {
+    const results = await Promise.all(urls.slice(i, i + MAX).map(async (url, batchIdx) => {
+      try {
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const data = new Uint8Array(await resp.arrayBuffer());
+
+        // 1. Try filename from URL path (strip query string)
+        let name = url.split('?')[0].split('/').filter(Boolean).pop() || 'image';
+        name = name.slice(-80); // limit length
+
+        // 2. Detect extension — use Content-Type if filename has no image extension
+        const KNOWN_EXTS = /\.(jpg|jpeg|png|webp|gif|svg|avif|bmp|tiff|ico)$/i;
+        if (!KNOWN_EXTS.test(name)) {
+          const mime   = (resp.headers.get('Content-Type') || '').split(';')[0].trim().toLowerCase();
+          const ext    = MIME_EXT[mime] || detectExtFromBytes(data) || '.jpg';
+          // Strip any existing non-image extension and add correct one
+          const dotPos = name.lastIndexOf('.');
+          const base   = dotPos > 0 && dotPos > name.length - 8 ? name.slice(0, dotPos) : name;
+          name = base + ext;
+        }
+
+        return { name, data };
+      } catch (_) { return null; }
+    }));
+    results.forEach(r => { if (r) entries.push(r); });
+  }
+
+  if (!entries.length) throw new Error('No images fetched');
+
+  // Deduplicate filenames
+  const seen = {};
+  entries.forEach(e => {
+    const key = e.name;
+    if (seen[key] !== undefined) {
+      const dot  = e.name.lastIndexOf('.');
+      const base = dot > 0 ? e.name.slice(0, dot) : e.name;
+      const ext  = dot > 0 ? e.name.slice(dot)    : '';
+      e.name = base + '_' + (++seen[key]) + ext;
+    } else { seen[key] = 0; }
+  });
+
+  const zip  = buildZip(entries);
+  const blob = new Blob([zip], { type: 'application/zip' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = zipName + '.zip'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// Detect image format from magic bytes (file signature)
+function detectExtFromBytes(bytes) {
+  if (!bytes || bytes.length < 4) return null;
+  const h = bytes;
+  // JPEG: FF D8 FF
+  if (h[0]===0xFF && h[1]===0xD8 && h[2]===0xFF) return '.jpg';
+  // PNG: 89 50 4E 47
+  if (h[0]===0x89 && h[1]===0x50 && h[2]===0x4E && h[3]===0x47) return '.png';
+  // GIF: 47 49 46 38
+  if (h[0]===0x47 && h[1]===0x49 && h[2]===0x46 && h[3]===0x38) return '.gif';
+  // WEBP: 52 49 46 46 ... 57 45 42 50
+  if (h[0]===0x52 && h[1]===0x49 && h[2]===0x46 && h[3]===0x46 && bytes.length>11 && h[8]===0x57 && h[9]===0x45 && h[10]===0x42 && h[11]===0x50) return '.webp';
+  // AVIF / HEIF (ftyp box): bytes 4-7 = 'ftyp'
+  if (bytes.length>11 && h[4]===0x66 && h[5]===0x74 && h[6]===0x79 && h[7]===0x70) return '.avif';
+  // SVG: starts with '<' or UTF-8 BOM then '<'
+  if (h[0]===0x3C || (h[0]===0xEF && h[1]===0xBB && h[2]===0xBF && h[3]===0x3C)) return '.svg';
+  // BMP: 42 4D
+  if (h[0]===0x42 && h[1]===0x4D) return '.bmp';
+  // ICO: 00 00 01 00
+  if (h[0]===0x00 && h[1]===0x00 && h[2]===0x01 && h[3]===0x00) return '.ico';
+  return null;
+}
+
+function buildZip(entries) {
+  const T = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) { let c = i; for (let j = 0; j < 8; j++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1); T[i] = c; }
+  const crc32 = d => { let c = 0xFFFFFFFF; for (let i = 0; i < d.length; i++) c = T[(c ^ d[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; };
+  const u16 = n => [n & 0xFF, (n >> 8) & 0xFF];
+  const u32 = n => [n & 0xFF, (n >> 8) & 0xFF, (n >> 16) & 0xFF, (n >> 24) & 0xFF];
+
+  const parts = []; const central = []; let off = 0;
+  for (const { name, data } of entries) {
+    const nb = new TextEncoder().encode(name);
+    const cr = crc32(data);
+    const lh = new Uint8Array([0x50,0x4B,0x03,0x04,0x14,0,0,0,0,0,0,0,0,0,...u32(cr),...u32(data.length),...u32(data.length),...u16(nb.length),0,0,...nb]);
+    const ce = new Uint8Array([0x50,0x4B,0x01,0x02,0x14,0,0x14,0,0,0,0,0,0,0,0,0,...u32(cr),...u32(data.length),...u32(data.length),...u16(nb.length),0,0,0,0,0,0,0,0,0,0,0,0,...u32(off),...nb]);
+    parts.push(lh, data); central.push(ce);
+    off += lh.length + data.length;
+  }
+  const cd  = central.reduce((a,b) => { const c = new Uint8Array(a.length+b.length); c.set(a); c.set(b,a.length); return c; }, new Uint8Array(0));
+  const eocd = new Uint8Array([0x50,0x4B,0x05,0x06,0,0,0,0,...u16(entries.length),...u16(entries.length),...u32(cd.length),...u32(off),0,0]);
+  parts.push(cd, eocd);
+  const tot = parts.reduce((s,p) => s+p.length,0);
+  const out = new Uint8Array(tot); let pos = 0;
+  for (const p of parts) { out.set(p,pos); pos += p.length; }
+  return out;
 }
 
 // ── Download helper ───────────────────────────────────────────────────────────
