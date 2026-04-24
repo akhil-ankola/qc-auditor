@@ -271,7 +271,7 @@ let _schemaPretty = new Map();   // idx → pretty JSON string (avoids large dat
       transition: background .25s, border-color .25s;
     }
     .ov-search {
-      flex: 1; padding: 5px 10px; border-radius: 20px;
+      flex: 1; max-width: 130px; padding: 5px 10px; border-radius: 20px;
       border: 1.5px solid var(--border); background: var(--input-bg);
       color: var(--t1); font-size: 11px; font-family: inherit;
       outline: none; transition: border-color .15s;
@@ -287,6 +287,32 @@ let _schemaPretty = new Map();   // idx → pretty JSON string (avoids large dat
     }
     .ov-export-btn:hover { opacity: .85; }
     .ov-export-btn.green { background: var(--green); }
+
+    /* ── Download on Front toggle (in ov-toolbar) ─────────────────── */
+    .img-dl-front-label {
+      display: flex; align-items: center; gap: 5px;
+      cursor: pointer; white-space: nowrap; flex-shrink: 0;
+      padding: 4px 9px 4px 6px; border-radius: 20px;
+      border: 1.5px solid var(--border); background: var(--card);
+      font-size: 10.5px; font-weight: 700; color: var(--t3);
+      transition: all .15s; user-select: none;
+    }
+    .img-dl-front-label input[type="checkbox"] { display: none; }
+    .img-dl-front-label:hover { border-color: var(--blue); color: var(--blue); }
+    .img-dl-front-label:has(input:checked) { border-color: var(--blue); background: var(--blue-lt); color: var(--blue); }
+    .img-dl-front-toggle {
+      width: 26px; height: 14px; border-radius: 7px; flex-shrink: 0;
+      background: var(--border2); border: 1.5px solid var(--border);
+      position: relative; transition: all .2s;
+    }
+    .img-dl-front-toggle::after {
+      content: ''; position: absolute; top: 1px; left: 1px;
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--t4); transition: transform .2s, background .2s;
+    }
+    .img-dl-front-label:has(input:checked) .img-dl-front-toggle { background: var(--blue-lt); border-color: var(--blue); }
+    .img-dl-front-label:has(input:checked) .img-dl-front-toggle::after { transform: translateX(12px); background: var(--blue); }
+
     .ov-fmt-bar {
       display: flex; flex-wrap: wrap; gap: 5px; align-items: center;
       padding: 8px 12px; background: var(--card);
@@ -1245,6 +1271,11 @@ function renderOvImages(OV) {
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
         Copy URLs
       </button>
+      <label class="img-dl-front-label" title="Hover over any image on the page to see a download popup">
+        <input type="checkbox" id="chkDownloadFront">
+        <span class="img-dl-front-toggle"></span>
+        Download on Front
+      </label>
     </div>
     <!-- Lists -->
     <div id="imgAllSections">
@@ -1332,6 +1363,26 @@ function renderOvImages(OV) {
       }, 1500);
     });
   });
+
+  // Download on Front toggle — sends message to content script
+  el.querySelector('#chkDownloadFront').addEventListener('change', async (e) => {
+    const enabled = e.target.checked;
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab?.id) await chrome.tabs.sendMessage(tab.id, { action: 'toggleImageDownloader', enabled });
+    } catch (_) {}
+  });
+
+  // Restore checkbox state — query content script to see if downloader is still active
+  (async () => {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tab?.id) return;
+      const resp = await chrome.tabs.sendMessage(tab.id, { action: 'getImageDownloaderState' });
+      const chk  = el.querySelector('#chkDownloadFront');
+      if (chk && resp?.active) chk.checked = true;
+    } catch (_) {}
+  })();
 
   // Per-image download buttons (delegated)
   el.addEventListener('click', async (e) => {

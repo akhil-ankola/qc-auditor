@@ -623,6 +623,16 @@ if (!window.__qcAuditorLoaded) {
       try { window.FontInspector.remove(); sendResponse({ success: true }); }
       catch (err) { sendResponse({ success: false, error: err.message }); }
     }
+    if (request.action === 'toggleImageDownloader') {
+      try {
+        if (request.enabled) window.ImageDownloader.activate();
+        else window.ImageDownloader.remove();
+        sendResponse({ success: true });
+      } catch (err) { sendResponse({ success: false, error: err.message }); }
+    }
+    if (request.action === 'getImageDownloaderState') {
+      sendResponse({ active: !!window.__idActive__ });
+    }
     return true;
   });
 }
@@ -1018,3 +1028,657 @@ window.FontInspector = (() => {
 })();
 
 } // end __FontInspectorLoaded guard
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  IMAGE DOWNLOADER ENGINE  (runs in the page context)
+// ══════════════════════════════════════════════════════════════════════════════
+if (!window.__ImageDownloaderLoaded) {
+  window.__ImageDownloaderLoaded = true;
+
+window.ImageDownloader = (() => {
+  let styleEl    = null;
+  let popup      = null;
+  let hideTimer  = null;
+  let currentEl  = null;
+  let mutObs     = null;
+  let imgListeners = [];
+  let bgListeners  = [];
+  let svgListeners = [];
+  let currentSvgEl = null;
+
+  // ── Inject popup styles into the page ────────────────────────────────────────
+  function injectStyles() {
+    if (styleEl) return;
+    styleEl = document.createElement('style');
+    styleEl.id = '__id_styles__';
+    styleEl.textContent = `
+      .__id_popup__ {
+        position: fixed !important;
+        z-index: 2147483647 !important;
+        background: #1e1e2e !important;
+        color: #e8eaed !important;
+        border-radius: 12px !important;
+        box-shadow: 0 8px 32px rgba(0,0,0,.65) !important;
+        border: 1px solid #3a3a5c !important;
+        padding: 10px !important;
+        width: 230px !important;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+        font-size: 12px !important;
+        font-weight: 400 !important;
+        line-height: 1.4 !important;
+        pointer-events: auto !important;
+        display: none !important;
+        letter-spacing: 0 !important;
+        text-transform: none !important;
+      }
+      .__id_popup__.__id_visible__ {
+        display: block !important;
+        animation: __id_fadein__ .13s ease !important;
+      }
+      @keyframes __id_fadein__ {
+        from { opacity: 0; transform: translateY(4px); }
+        to   { opacity: 1; transform: translateY(0); }
+      }
+      .__id_thumb_wrap__ {
+        width: 100% !important;
+        height: 96px !important;
+        border-radius: 7px !important;
+        overflow: hidden !important;
+        background: #12121e !important;
+        margin-bottom: 8px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+      }
+      .__id_thumb__ {
+        max-width: 100% !important;
+        max-height: 96px !important;
+        object-fit: contain !important;
+        display: block !important;
+        border-radius: 4px !important;
+      }
+      .__id_preview_unavail__ {
+        color: #6b7280 !important;
+        font-size: 11px !important;
+        font-family: inherit !important;
+        text-align: center !important;
+      }
+      .__id_row__ {
+        display: flex !important;
+        align-items: center !important;
+        gap: 6px !important;
+        margin-bottom: 7px !important;
+      }
+      .__id_resolution__ {
+        font-size: 13px !important;
+        font-weight: 800 !important;
+        color: #8ab4f8 !important;
+        flex: 1 !important;
+        font-family: inherit !important;
+      }
+      .__id_badge_hd__ {
+        font-size: 9px !important;
+        font-weight: 800 !important;
+        background: #81c995 !important;
+        color: #061006 !important;
+        padding: 2px 6px !important;
+        border-radius: 4px !important;
+        white-space: nowrap !important;
+        flex-shrink: 0 !important;
+        letter-spacing: .03em !important;
+      }
+      .__id_badge_bg__ {
+        font-size: 9px !important;
+        font-weight: 800 !important;
+        background: #ffa94d !important;
+        color: #1a0800 !important;
+        padding: 2px 6px !important;
+        border-radius: 4px !important;
+        white-space: nowrap !important;
+        flex-shrink: 0 !important;
+        letter-spacing: .03em !important;
+      }
+      .__id_sep__ {
+        border: none !important;
+        border-top: 1px solid #3a3a5c !important;
+        margin: 7px 0 !important;
+      }
+      .__id_label__ {
+        font-size: 9px !important;
+        font-weight: 700 !important;
+        text-transform: uppercase !important;
+        letter-spacing: .06em !important;
+        color: #6b7280 !important;
+        margin-bottom: 5px !important;
+        display: block !important;
+        font-family: inherit !important;
+      }
+      .__id_fmt_row__ {
+        display: flex !important;
+        gap: 4px !important;
+      }
+      .__id_btn__ {
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 4px !important;
+        padding: 5px 9px !important;
+        border-radius: 6px !important;
+        border: 1px solid #3a3a5c !important;
+        background: #28283e !important;
+        color: #e8eaed !important;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+        font-size: 10.5px !important;
+        font-weight: 700 !important;
+        cursor: pointer !important;
+        transition: background .12s, border-color .12s !important;
+        white-space: nowrap !important;
+        letter-spacing: 0 !important;
+        text-transform: none !important;
+      }
+      .__id_btn__:hover { background: #1A73E8 !important; border-color: #1A73E8 !important; color: #fff !important; }
+      .__id_btn_primary__ { background: #1A73E8 !important; border-color: #1A73E8 !important; color: #fff !important; flex: 1 !important; }
+      .__id_btn_primary__:hover { opacity: .85 !important; background: #1A73E8 !important; }
+      .__id_btn_preview__ { background: #7B2FBE !important; border-color: #7B2FBE !important; color: #fff !important; flex: 1 !important; }
+      .__id_btn_preview__:hover { opacity: .85 !important; background: #7B2FBE !important; }
+      /* Hover outline on images */
+      .__id_hover__ { outline: 2px solid #1A73E8 !important; outline-offset: 2px !important; }
+      /* Preview modal */
+      .__id_modal__ {
+        position: fixed !important;
+        inset: 0 !important;
+        z-index: 2147483647 !important;
+        background: rgba(0,0,0,.88) !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        flex-direction: column !important;
+        gap: 14px !important;
+        padding: 24px !important;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+        cursor: zoom-out !important;
+      }
+      .__id_modal_img__ {
+        max-width: 90vw !important;
+        max-height: 80vh !important;
+        object-fit: contain !important;
+        border-radius: 10px !important;
+        box-shadow: 0 20px 60px rgba(0,0,0,.8) !important;
+        cursor: default !important;
+        display: block !important;
+      }
+      .__id_modal_info__ {
+        color: #9aa0a6 !important;
+        font-size: 12px !important;
+        font-family: inherit !important;
+        text-align: center !important;
+        letter-spacing: 0 !important;
+        text-transform: none !important;
+      }
+      .__id_modal_bar__ {
+        display: flex !important;
+        align-items: center !important;
+        gap: 10px !important;
+      }
+      .__id_modal_btn__ {
+        padding: 8px 20px !important;
+        border-radius: 8px !important;
+        border: none !important;
+        font-family: inherit !important;
+        font-size: 12px !important;
+        font-weight: 700 !important;
+        cursor: pointer !important;
+        transition: opacity .15s !important;
+        letter-spacing: 0 !important;
+        text-transform: none !important;
+      }
+      .__id_modal_btn__:hover { opacity: .82 !important; }
+      .__id_modal_dl__    { background: #1A73E8 !important; color: #fff !important; }
+      .__id_modal_close__ { background: #3a3a5c !important; color: #e8eaed !important; }
+    `;
+    document.head.appendChild(styleEl);
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────────
+  function escAttr(str) {
+    return (str || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function filenameFrom(src) {
+    return src.split('?')[0].split('/').filter(Boolean).pop() || 'image';
+  }
+
+  function parseBgUrl(el) {
+    const bg = window.getComputedStyle(el).backgroundImage;
+    if (!bg || bg === 'none') return null;
+    const m = bg.match(/url\(['"]?([^'")\s]+)['"]?\)/);
+    return m ? m[1] : null;
+  }
+
+  function detectHD(imgEl) {
+    const srcset = imgEl.getAttribute('srcset') || imgEl.getAttribute('data-srcset') || '';
+    if (!srcset) return null;
+    let best = { url: null, w: 0 };
+    srcset.split(',').forEach(part => {
+      const [url, desc] = part.trim().split(/\s+/);
+      if (!url) return;
+      const w = desc ? (parseFloat(desc) || 0) : 1;
+      if (w > best.w) best = { url: url.trim(), w };
+    });
+    return best.url && best.w > 1 ? best.url : null;
+  }
+
+  function getResolution(src, cb) {
+    const img = new Image();
+    img.onload  = () => cb(img.naturalWidth, img.naturalHeight);
+    img.onerror = () => cb(null, null);
+    img.src = src;
+  }
+
+  function downloadOriginal(src, filename) {
+    fetch(src, { mode: 'cors' })
+      .then(r => r.blob())
+      .then(blob => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = filename; document.body.appendChild(a); a.click();
+        document.body.removeChild(a); setTimeout(() => URL.revokeObjectURL(url), 2000);
+      })
+      .catch(() => {
+        const a = document.createElement('a');
+        a.href = src; a.download = filename; a.target = '_blank';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      });
+  }
+
+  function downloadConverted(src, fmt, filename) {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width  = img.naturalWidth  || 300;
+        canvas.height = img.naturalHeight || 300;
+        const ctx = canvas.getContext('2d');
+        if (fmt === 'jpeg') { ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height); }
+        ctx.drawImage(img, 0, 0);
+        const mimes = { png: 'image/png', jpeg: 'image/jpeg', webp: 'image/webp' };
+        canvas.toBlob(blob => {
+          if (!blob) { downloadOriginal(src, filename); return; }
+          const url  = URL.createObjectURL(blob);
+          const ext  = fmt === 'jpeg' ? 'jpg' : fmt;
+          const base = filename.replace(/\.[^.]+$/, '');
+          const a    = document.createElement('a');
+          a.href = url; a.download = `${base}.${ext}`;
+          document.body.appendChild(a); a.click(); document.body.removeChild(a);
+          setTimeout(() => URL.revokeObjectURL(url), 2000);
+        }, mimes[fmt] || 'image/png', 0.95);
+      } catch (_) { downloadOriginal(src, filename); }
+    };
+    img.onerror = () => downloadOriginal(src, filename);
+    img.src = src;
+  }
+
+  // ── Inline SVG helpers ────────────────────────────────────────────────────────
+  function serializeSVG(svgEl) {
+    const clone = svgEl.cloneNode(true);
+    if (!clone.getAttribute('xmlns')) clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    return new XMLSerializer().serializeToString(clone);
+  }
+
+  function svgToDataURI(svgEl) {
+    return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(serializeSVG(svgEl));
+  }
+
+  function svgIntrinsicSize(svgEl) {
+    const vb = svgEl.viewBox && svgEl.viewBox.baseVal;
+    const w  = (vb && vb.width)  || parseFloat(svgEl.getAttribute('width'))  || 0;
+    const h  = (vb && vb.height) || parseFloat(svgEl.getAttribute('height')) || 0;
+    if (w && h) return { w: Math.round(w), h: Math.round(h) };
+    const rect = svgEl.getBoundingClientRect();
+    return { w: Math.round(rect.width) || 64, h: Math.round(rect.height) || 64 };
+  }
+
+  function downloadSVGDirect(svgEl, filename) {
+    const blob = new Blob([serializeSVG(svgEl)], { type: 'image/svg+xml' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    const name = filename.replace(/\.[^.]+$/, '') + '.svg';
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }
+
+  function downloadSVGConverted(svgEl, fmt, filename) {
+    const { w, h } = svgIntrinsicSize(svgEl);
+    const dataUri  = svgToDataURI(svgEl);
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (fmt === 'jpeg') { ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, w, h); }
+        ctx.drawImage(img, 0, 0, w, h);
+        const mimes = { png: 'image/png', jpeg: 'image/jpeg', webp: 'image/webp' };
+        canvas.toBlob(blob => {
+          if (!blob) return;
+          const url  = URL.createObjectURL(blob);
+          const ext  = fmt === 'jpeg' ? 'jpg' : fmt;
+          const base = filename.replace(/\.[^.]+$/, '');
+          const a    = document.createElement('a');
+          a.href = url; a.download = `${base}.${ext}`;
+          document.body.appendChild(a); a.click(); document.body.removeChild(a);
+          setTimeout(() => URL.revokeObjectURL(url), 2000);
+        }, mimes[fmt] || 'image/png', 0.95);
+      } catch (_) {}
+    };
+    img.src = dataUri;
+  }
+
+  // ── Popup ─────────────────────────────────────────────────────────────────────
+  function buildPopup() {
+    popup = document.createElement('div');
+    popup.className = '__id_popup__';
+    popup.addEventListener('mouseenter', () => clearTimeout(hideTimer));
+    popup.addEventListener('mouseleave', scheduleHide);
+    // Delegated click handler — handles both URL images and inline SVGs
+    popup.addEventListener('click', e => {
+      const btn = e.target.closest('[data-id-action]');
+      if (!btn) return;
+      const action   = btn.dataset.idAction;
+      const filename = popup.dataset.filename;
+      if (popup.dataset.mode === 'svg' && currentSvgEl) {
+        if      (action === 'dl-orig')  downloadSVGDirect(currentSvgEl, filename);
+        else if (action === 'dl-png')   downloadSVGConverted(currentSvgEl, 'png',  filename);
+        else if (action === 'dl-jpeg')  downloadSVGConverted(currentSvgEl, 'jpeg', filename);
+        else if (action === 'dl-webp')  downloadSVGConverted(currentSvgEl, 'webp', filename);
+        else if (action === 'preview')  openPreviewSVG(currentSvgEl, filename);
+      } else {
+        const src = popup.dataset.src;
+        if (!src) return;
+        if      (action === 'dl-orig')  downloadOriginal(src, filename);
+        else if (action === 'dl-svg')   downloadOriginal(src, filename); // SVG original
+        else if (action === 'dl-png')   downloadConverted(src, 'png',  filename);
+        else if (action === 'dl-jpeg')  downloadConverted(src, 'jpeg', filename);
+        else if (action === 'dl-webp')  downloadConverted(src, 'webp', filename);
+        else if (action === 'preview')  openPreview(src, filename);
+      }
+    });
+    document.body.appendChild(popup);
+  }
+
+  function showFor(el, src, isBg) {
+    if (!popup) buildPopup();
+    currentEl = el;
+
+    const isSvgSrc = /\.svg(\?|$)/i.test(src) || src.startsWith('data:image/svg');
+    const filename  = filenameFrom(src);
+    popup.dataset.src      = src;
+    popup.dataset.filename = filename;
+    popup.dataset.mode     = '';
+
+    // Position flush against the element — no gap so mouse can reach popup
+    const rect = el.getBoundingClientRect();
+    const pw = 230, ph = 290;
+    let top  = rect.bottom;
+    let left = rect.left;
+    if (left + pw > window.innerWidth  - 8) left = window.innerWidth  - pw - 8;
+    if (top  + ph > window.innerHeight - 4) top  = rect.top - ph;
+    if (left < 8) left = 8;
+    if (top  < 4) top  = 4;
+    popup.style.top  = `${top}px`;
+    popup.style.left = `${left}px`;
+
+    popup.innerHTML = `
+      <div class="__id_thumb_wrap__" id="__id_tw__">
+        <img class="__id_thumb__" src="${escAttr(src)}" alt="" id="__id_timg__">
+      </div>
+      <div class="__id_row__">
+        <span class="__id_resolution__" id="__id_res__">Detecting…</span>
+        ${isBg ? '<span class="__id_badge_bg__">BG Image</span>' : ''}
+      </div>
+      <hr class="__id_sep__">
+      <div class="__id_row__">
+        <button class="__id_btn__ __id_btn_primary__" data-id-action="dl-orig">↓ Download Original</button>
+        <button class="__id_btn__ __id_btn_preview__" data-id-action="preview">🔍 Preview</button>
+      </div>
+      <hr class="__id_sep__">
+      <span class="__id_label__">${isSvgSrc ? 'Download / convert:' : 'Download as format:'}</span>
+      <div class="__id_fmt_row__">
+        ${isSvgSrc ? '<button class="__id_btn__" data-id-action="dl-svg">SVG</button>' : ''}
+        <button class="__id_btn__" data-id-action="dl-png">PNG</button>
+        <button class="__id_btn__" data-id-action="dl-jpeg">JPG</button>
+        <button class="__id_btn__" data-id-action="dl-webp">WEBP</button>
+      </div>`;
+
+    popup.classList.add('__id_visible__');
+
+    // Thumbnail error → fallback text
+    const timg = popup.querySelector('#__id_timg__');
+    const tw   = popup.querySelector('#__id_tw__');
+    if (timg) timg.addEventListener('error', () => {
+      if (tw) tw.innerHTML = '<span class="__id_preview_unavail__">Preview unavailable</span>';
+    });
+
+    // Load resolution
+    getResolution(src, (w, h) => {
+      const resEl = popup.querySelector('#__id_res__');
+      if (!resEl) return;
+      if (w && h) {
+        resEl.textContent = `${w} × ${h} px`;
+        // HD badge for <img> with srcset
+        if (!isBg) {
+          const hdUrl = detectHD(el);
+          if (hdUrl) resEl.insertAdjacentHTML('afterend', ' <span class="__id_badge_hd__">HD Available</span>');
+        }
+      } else {
+        resEl.textContent = 'Size unknown';
+      }
+    });
+  }
+
+  function scheduleHide() {
+    hideTimer = setTimeout(() => {
+      if (popup) { popup.classList.remove('__id_visible__'); popup.dataset.mode = ''; }
+      if (currentEl)    { currentEl.classList.remove('__id_hover__');    currentEl    = null; }
+      if (currentSvgEl) { currentSvgEl.classList.remove('__id_hover__'); currentSvgEl = null; }
+    }, 400);
+  }
+
+  // ── Preview modal ─────────────────────────────────────────────────────────────
+  function openPreview(src, filename) {
+    let modal = document.querySelector('.__id_modal__');
+    if (modal) modal.remove();
+    modal = document.createElement('div');
+    modal.className = '__id_modal__';
+    modal.innerHTML = `
+      <img class="__id_modal_img__" src="${escAttr(src)}" alt="" id="__id_mimg__">
+      <div class="__id_modal_info__" id="__id_minfo__">Loading…</div>
+      <div class="__id_modal_bar__">
+        <button class="__id_modal_btn__ __id_modal_dl__"    id="__id_mdl__">↓ Download</button>
+        <button class="__id_modal_btn__ __id_modal_close__" id="__id_mclose__">✕ Close</button>
+      </div>`;
+    document.body.appendChild(modal);
+
+    modal.querySelector('#__id_mclose__').addEventListener('click', () => modal.remove());
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+    modal.querySelector('#__id_mdl__').addEventListener('click', () => downloadOriginal(src, filename));
+    modal.querySelector('#__id_mimg__').addEventListener('load', e => {
+      const info = modal.querySelector('#__id_minfo__');
+      if (info) info.textContent = `${e.target.naturalWidth} × ${e.target.naturalHeight} px  ·  ${filename}`;
+    });
+    const escHandler = e => { if (e.key === 'Escape') { modal.remove(); document.removeEventListener('keydown', escHandler); } };
+    document.addEventListener('keydown', escHandler);
+  }
+
+  // ── Inline SVG popup and modal ────────────────────────────────────────────────
+  function showForSVG(svgEl) {
+    if (!popup) buildPopup();
+    currentSvgEl        = svgEl;
+    currentEl           = svgEl;
+    popup.dataset.mode  = 'svg';
+    const { w, h }      = svgIntrinsicSize(svgEl);
+    const svgId         = svgEl.getAttribute('id') || svgEl.getAttribute('aria-label') || '';
+    const filename      = (svgId ? svgId.replace(/[^a-z0-9_-]/gi, '-') : 'svg-icon') + '.svg';
+    popup.dataset.filename = filename;
+    const thumbSrc      = svgToDataURI(svgEl);
+
+    const rect = svgEl.getBoundingClientRect();
+    const pw   = 230, ph = 290;
+    let top  = rect.bottom, left = rect.left;
+    if (left + pw > window.innerWidth  - 8) left = window.innerWidth  - pw - 8;
+    if (top  + ph > window.innerHeight - 4) top  = rect.top - ph;
+    if (left < 8) left = 8; if (top < 4) top = 4;
+    popup.style.top = `${top}px`; popup.style.left = `${left}px`;
+
+    popup.innerHTML = `
+      <div class="__id_thumb_wrap__">
+        <img class="__id_thumb__" src="${escAttr(thumbSrc)}" alt="">
+      </div>
+      <div class="__id_row__">
+        <span class="__id_resolution__">${w && h ? `${w} × ${h} px` : 'SVG (scalable)'}</span>
+        <span class="__id_badge_bg__">SVG</span>
+      </div>
+      <hr class="__id_sep__">
+      <div class="__id_row__">
+        <button class="__id_btn__ __id_btn_primary__" data-id-action="dl-orig">↓ Download SVG</button>
+        <button class="__id_btn__ __id_btn_preview__" data-id-action="preview">🔍 Preview</button>
+      </div>
+      <hr class="__id_sep__">
+      <span class="__id_label__">Rasterize &amp; download:</span>
+      <div class="__id_fmt_row__">
+        <button class="__id_btn__" data-id-action="dl-png">PNG</button>
+        <button class="__id_btn__" data-id-action="dl-jpeg">JPG</button>
+        <button class="__id_btn__" data-id-action="dl-webp">WEBP</button>
+      </div>`;
+    popup.classList.add('__id_visible__');
+  }
+
+  function openPreviewSVG(svgEl, filename) {
+    let modal = document.querySelector('.__id_modal__');
+    if (modal) modal.remove();
+    modal = document.createElement('div');
+    modal.className = '__id_modal__';
+    const { w, h } = svgIntrinsicSize(svgEl);
+    const thumbSrc = svgToDataURI(svgEl);
+    modal.innerHTML = `
+      <img class="__id_modal_img__" src="${escAttr(thumbSrc)}" alt="">
+      <div class="__id_modal_info__">${w && h ? `${w} × ${h} px  ·  ` : ''}${filename}</div>
+      <div class="__id_modal_bar__">
+        <button class="__id_modal_btn__ __id_modal_dl__"    id="__id_mdl__">↓ Download SVG</button>
+        <button class="__id_modal_btn__ __id_modal_close__" id="__id_mclose__">✕ Close</button>
+      </div>`;
+    document.body.appendChild(modal);
+    modal.querySelector('#__id_mclose__').addEventListener('click', () => modal.remove());
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+    modal.querySelector('#__id_mdl__').addEventListener('click', () => downloadSVGDirect(svgEl, filename));
+    const escH = e => { if (e.key === 'Escape') { modal.remove(); document.removeEventListener('keydown', escH); } };
+    document.addEventListener('keydown', escH);
+  }
+
+  // ── Attach / detach listeners ─────────────────────────────────────────────────
+  function attachImg(img) {
+    if (img.__idAttached__) return;
+    img.__idAttached__ = true;
+    const onEnter = () => {
+      clearTimeout(hideTimer);
+      const src = img.currentSrc || img.src || img.getAttribute('data-src') || '';
+      if (!src) return;
+      img.classList.add('__id_hover__');
+      showFor(img, src, false);
+    };
+    const onLeave = () => { img.classList.remove('__id_hover__'); scheduleHide(); };
+    img.addEventListener('mouseenter', onEnter);
+    img.addEventListener('mouseleave', onLeave);
+    imgListeners.push({ el: img, onEnter, onLeave });
+  }
+
+  function attachBg(el) {
+    if (el.__idBgAttached__) return;
+    const src = parseBgUrl(el);
+    if (!src) return;
+    el.__idBgAttached__ = true;
+    const onEnter = () => {
+      clearTimeout(hideTimer);
+      el.classList.add('__id_hover__');
+      showFor(el, src, true);
+    };
+    const onLeave = () => { el.classList.remove('__id_hover__'); scheduleHide(); };
+    el.addEventListener('mouseenter', onEnter);
+    el.addEventListener('mouseleave', onLeave);
+    bgListeners.push({ el, src, onEnter, onLeave });
+  }
+
+  function attachSVG(svgEl) {
+    if (svgEl.__idSvgAttached__) return;
+    // Skip SVGs inside our own UI or those that are tiny decorative marks (<4px)
+    if (svgEl.closest('.__id_popup__') || svgEl.closest('.__id_modal__')) return;
+    const rect = svgEl.getBoundingClientRect();
+    if (rect.width < 4 || rect.height < 4) return;
+    svgEl.__idSvgAttached__ = true;
+    const onEnter = () => { clearTimeout(hideTimer); svgEl.classList.add('__id_hover__'); showForSVG(svgEl); };
+    const onLeave = () => { svgEl.classList.remove('__id_hover__'); scheduleHide(); };
+    svgEl.addEventListener('mouseenter', onEnter);
+    svgEl.addEventListener('mouseleave', onLeave);
+    svgListeners.push({ el: svgEl, onEnter, onLeave });
+  }
+
+  const BG_CANDIDATES = 'div,section,figure,article,aside,header,footer,main,span,a,li,td,th';
+
+  function scanAll() {
+    document.querySelectorAll('img').forEach(attachImg);
+    document.querySelectorAll(BG_CANDIDATES).forEach(el => {
+      const bg = window.getComputedStyle(el).backgroundImage;
+      if (bg && bg !== 'none' && bg.includes('url(')) attachBg(el);
+    });
+    // Inline <svg> elements (icons, illustrations)
+    document.querySelectorAll('svg').forEach(attachSVG);
+  }
+
+  // ── Public API ────────────────────────────────────────────────────────────────
+  function activate() {
+    window.__idActive__ = true;
+    injectStyles();
+    if (!popup) buildPopup();
+    scanAll();
+    mutObs = new MutationObserver(() => scanAll());
+    mutObs.observe(document.body, { childList: true, subtree: true });
+  }
+
+  function remove() {
+    window.__idActive__ = false;
+    if (mutObs) { mutObs.disconnect(); mutObs = null; }
+    clearTimeout(hideTimer);
+    if (popup) { popup.remove(); popup = null; }
+    const modal = document.querySelector('.__id_modal__');
+    if (modal) modal.remove();
+    imgListeners.forEach(({ el, onEnter, onLeave }) => {
+      el.removeEventListener('mouseenter', onEnter);
+      el.removeEventListener('mouseleave', onLeave);
+      el.__idAttached__ = false;
+      el.classList.remove('__id_hover__');
+    });
+    bgListeners.forEach(({ el, onEnter, onLeave }) => {
+      el.removeEventListener('mouseenter', onEnter);
+      el.removeEventListener('mouseleave', onLeave);
+      el.__idBgAttached__ = false;
+      el.classList.remove('__id_hover__');
+    });
+    svgListeners.forEach(({ el, onEnter, onLeave }) => {
+      el.removeEventListener('mouseenter', onEnter);
+      el.removeEventListener('mouseleave', onLeave);
+      el.__idSvgAttached__ = false;
+      el.classList.remove('__id_hover__');
+    });
+    imgListeners = [];
+    bgListeners  = [];
+    svgListeners = [];
+    if (styleEl) { styleEl.remove(); styleEl = null; }
+    currentEl = null; currentSvgEl = null;
+  }
+
+  return { activate, remove };
+})();
+
+} // end __ImageDownloaderLoaded guard
