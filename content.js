@@ -605,6 +605,45 @@ if (!window.__qcAuditorLoaded) {
       { group: 'Framework',           name: 'Nuxt.js',             value: nuxtVal },
     ];
 
+    // ── WCAG: Tab Order ────────────────────────────────────────────────────────
+    function collectTabOrder() {
+      const sel = [
+        'a[href]', 'button:not([disabled])',
+        'input:not([type="hidden"]):not([disabled])',
+        'select:not([disabled])', 'textarea:not([disabled])',
+        '[tabindex]:not([tabindex="-1"])', 'area[href]',
+        'details > summary', '[contenteditable="true"]'
+      ].join(', ');
+      let all = [];
+      try {
+        all = [...document.querySelectorAll(sel)].filter(el => {
+          const r = el.getBoundingClientRect();
+          if (r.width === 0 && r.height === 0) return false;
+          const s = window.getComputedStyle(el);
+          return s.visibility !== 'hidden' && s.display !== 'none';
+        });
+      } catch (_) { return []; }
+      const pos = all.filter(el => parseInt(el.getAttribute('tabindex') || '0') > 0)
+                     .sort((a, b) => parseInt(a.getAttribute('tabindex')) - parseInt(b.getAttribute('tabindex')));
+      const nat = all.filter(el => !(parseInt(el.getAttribute('tabindex') || '0') > 0));
+      return [...pos, ...nat].slice(0, 200).map((el, i) => {
+        const rect = el.getBoundingClientRect();
+        const tag  = el.tagName.toLowerCase();
+        const text = (el.getAttribute('aria-label') || el.getAttribute('title') || el.textContent || el.getAttribute('placeholder') || '').trim().slice(0, 60);
+        return {
+          index: i + 1, tag,
+          type: el.getAttribute('type') || '',
+          text, role: el.getAttribute('role') || '',
+          tabindex: el.getAttribute('tabindex'),
+          x: Math.round(rect.left + window.scrollX),
+          y: Math.round(rect.top  + window.scrollY),
+          w: Math.round(rect.width),
+          h: Math.round(rect.height)
+        };
+      });
+    }
+    data.wcag = { tabOrder: collectTabOrder() };
+
     return data;
   }
 
@@ -632,6 +671,13 @@ if (!window.__qcAuditorLoaded) {
     }
     if (request.action === 'getImageDownloaderState') {
       sendResponse({ active: !!window.__idActive__ });
+    }
+    if (request.action === 'toggleTabOrderOverlay') {
+      try {
+        if (request.enabled) window.TabOrderOverlay.activate();
+        else window.TabOrderOverlay.remove();
+        sendResponse({ success: true });
+      } catch (err) { sendResponse({ success: false, error: err.message }); }
     }
     return true;
   });
@@ -1682,3 +1728,139 @@ window.ImageDownloader = (() => {
 })();
 
 } // end __ImageDownloaderLoaded guard
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  TAB ORDER OVERLAY ENGINE
+// ══════════════════════════════════════════════════════════════════════════════
+if (!window.__TabOrderOverlayLoaded) {
+  window.__TabOrderOverlayLoaded = true;
+
+window.TabOrderOverlay = (() => {
+  const OID = '__pp_tab_overlay__';
+  const SID = '__pp_tab_svg__';
+  let _scrollCb = null;
+
+  function remove() {
+    if (_scrollCb) {
+      window.removeEventListener('scroll', _scrollCb, true);
+      window.removeEventListener('resize', _scrollCb);
+      _scrollCb = null;
+    }
+    [OID, SID].forEach(id => { const el = document.getElementById(id); if (el) el.remove(); });
+  }
+
+  function activate() {
+    remove();
+    const sel = [
+      'a[href]', 'button:not([disabled])',
+      'input:not([type="hidden"]):not([disabled])',
+      'select:not([disabled])', 'textarea:not([disabled])',
+      '[tabindex]:not([tabindex="-1"])', 'area[href]',
+      'details > summary', '[contenteditable="true"]'
+    ].join(', ');
+
+    let all = [];
+    try {
+      all = [...document.querySelectorAll(sel)].filter(el => {
+        const r = el.getBoundingClientRect();
+        if (r.width === 0 && r.height === 0) return false;
+        const s = window.getComputedStyle(el);
+        return s.visibility !== 'hidden' && s.display !== 'none';
+      });
+    } catch (_) { return; }
+
+    const posTabIdx = all.filter(el => parseInt(el.getAttribute('tabindex') || '0') > 0)
+                        .sort((a, b) => parseInt(a.getAttribute('tabindex')) - parseInt(b.getAttribute('tabindex')));
+    const natural   = all.filter(el => !(parseInt(el.getAttribute('tabindex') || '0') > 0));
+    const ordered   = [...posTabIdx, ...natural].slice(0, 200);
+    if (!ordered.length) return;
+
+    const NS   = 'http://www.w3.org/2000/svg';
+    const root = document.documentElement;
+
+    // Badges container — fixed positioning so it is never clipped by body overflow
+    const container = document.createElement('div');
+    container.id = OID;
+    container.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;pointer-events:none;z-index:2147483647;overflow:visible;';
+
+    ordered.forEach((el, i) => {
+      const badge = document.createElement('div');
+      badge.dataset.ppIdx = String(i);
+      badge.style.cssText = 'position:fixed;width:24px;height:24px;border-radius:50%;background:#1A73E8;color:#fff;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;font-family:sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.45);transition:opacity .1s;';
+      badge.textContent = String(i + 1);
+      container.appendChild(badge);
+    });
+
+    // SVG for arrows — also fixed + overflow:visible so lines span across viewport
+    const svg = document.createElementNS(NS, 'svg');
+    svg.id    = SID;
+    svg.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;overflow:visible;pointer-events:none;z-index:2147483646;';
+    svg.setAttribute('xmlns', NS);
+
+    const defs = document.createElementNS(NS, 'defs');
+    const mk   = document.createElementNS(NS, 'marker');
+    mk.setAttribute('id', '__pp_arr__');
+    mk.setAttribute('markerWidth', '10'); mk.setAttribute('markerHeight', '7');
+    mk.setAttribute('refX', '9');         mk.setAttribute('refY', '3.5');
+    mk.setAttribute('orient', 'auto');
+    const poly = document.createElementNS(NS, 'polygon');
+    poly.setAttribute('points', '0 0, 10 3.5, 0 7');
+    poly.setAttribute('fill', '#1A73E8'); poly.setAttribute('fill-opacity', '0.7');
+    mk.appendChild(poly); defs.appendChild(mk); svg.appendChild(defs);
+
+    root.appendChild(container);
+    root.appendChild(svg);
+
+    // update() recalculates viewport-relative positions on every scroll/resize
+    function update() {
+      const badges  = container.querySelectorAll('[data-pp-idx]');
+      const centers = [];
+      const vh      = window.innerHeight;
+
+      ordered.forEach((el, i) => {
+        let r;
+        try { r = el.getBoundingClientRect(); } catch (_) { r = { left:0, top:0, width:0, height:0 }; }
+        const cx = r.left + r.width  / 2;
+        const cy = r.top  + r.height / 2;
+        centers.push({ cx, cy });
+
+        const badge = badges[i];
+        if (!badge) return;
+        badge.style.left    = (cx - 12) + 'px';
+        badge.style.top     = (r.top - 16) + 'px';
+        // fade out badges whose element is off the visible viewport
+        badge.style.opacity = (r.top > -40 && r.top < vh + 40) ? '1' : '0';
+      });
+
+      // Rebuild arrows — only between pairs where at least one end is near the viewport
+      svg.querySelectorAll('line').forEach(l => l.remove());
+      for (let i = 0; i < centers.length - 1; i++) {
+        const { cx: x1, cy: y1 } = centers[i];
+        const { cx: x2, cy: y2 } = centers[i + 1];
+        if (y1 < -80 && y2 < -80) continue;          // both above viewport
+        if (y1 > vh + 80 && y2 > vh + 80) continue;  // both below viewport
+        const dx = x2 - x1, dy = y2 - y1;
+        const d  = Math.sqrt(dx * dx + dy * dy);
+        if (d < 8) continue;
+        const ratio = Math.max(0, (d - 16) / d);
+        const line  = document.createElementNS(NS, 'line');
+        line.setAttribute('x1', x1);               line.setAttribute('y1', y1 - 4);
+        line.setAttribute('x2', x1 + dx * ratio);  line.setAttribute('y2', y1 - 4 + dy * ratio);
+        line.setAttribute('stroke', '#1A73E8');     line.setAttribute('stroke-width', '1.5');
+        line.setAttribute('stroke-opacity', '0.55');
+        line.setAttribute('stroke-dasharray', '5,3');
+        line.setAttribute('marker-end', 'url(#__pp_arr__)');
+        svg.appendChild(line);
+      }
+    }
+
+    update();
+    _scrollCb = update;
+    window.addEventListener('scroll', update, { passive: true, capture: true });
+    window.addEventListener('resize', update, { passive: true });
+  }
+
+  return { activate, remove };
+})();
+
+} // end __TabOrderOverlayLoaded guard

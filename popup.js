@@ -478,6 +478,93 @@ let _schemaPretty = new Map();   // idx → pretty JSON string (avoids large dat
       background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%238AB4F8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
     }
     .ov-load-more-btn:hover { background: var(--blue-lt); }
+
+    /* ── Schema Accordion ─────────────────────────────────────────── */
+    .ov-schema-block-head { cursor: pointer; user-select: none; }
+    .ov-schema-chevron {
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; transition: transform .2s; color: var(--t4); margin-left: 2px;
+    }
+    .ov-schema-block.collapsed .ov-schema-chevron { transform: rotate(-90deg); }
+    .ov-schema-block.collapsed .ov-schema-code,
+    .ov-schema-block.collapsed .ov-schema-error { display: none; }
+
+    /* ── WCAG Tab ─────────────────────────────────────────────────── */
+    .wcag-tabs-bar {
+      display: flex; gap: 5px; padding: 7px 10px;
+      background: var(--bg); border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 10;
+      transition: background .25s, border-color .25s;
+    }
+    .wcag-tab-btn {
+      padding: 4px 12px; border: 1.5px solid var(--border);
+      background: var(--card); cursor: pointer; font-family: inherit;
+      font-size: 11px; font-weight: 600; color: var(--t3);
+      border-radius: 20px; transition: all .15s; white-space: nowrap;
+    }
+    .wcag-tab-btn::after { display: none; }
+    .wcag-tab-btn.active { background: var(--purple); border-color: var(--purple); color: #fff; font-weight: 700; }
+    .wcag-tab-btn:hover:not(.active) { border-color: var(--purple); color: var(--purple); background: var(--purple-lt); }
+    .wcag-panel { display: none; }
+    .wcag-panel.active { display: block; }
+
+    /* ── WCAG Order tab ───────────────────────────────────────────── */
+    .wcag-order-ctrl {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+      padding: 9px 14px; background: var(--card);
+      border-bottom: 2px solid var(--border);
+      transition: background .25s, border-color .25s;
+    }
+    .wcag-path-label {
+      display: flex; align-items: center; gap: 8px; cursor: pointer;
+      user-select: none; padding: 6px 12px; border-radius: 20px;
+      border: 1.5px solid var(--border); background: var(--bg);
+      font-size: 11.5px; font-weight: 700; color: var(--t2); transition: all .15s;
+    }
+    .wcag-path-label input[type="checkbox"] { display: none; }
+    .wcag-path-toggle {
+      width: 32px; height: 17px; border-radius: 9px; flex-shrink: 0;
+      background: var(--border2); border: 1.5px solid var(--border);
+      position: relative; transition: all .2s;
+    }
+    .wcag-path-toggle::after {
+      content: ''; position: absolute; top: 1px; left: 1px;
+      width: 11px; height: 11px; border-radius: 50%;
+      background: var(--t4); transition: transform .2s, background .2s;
+    }
+    .wcag-path-label:has(input:checked) { border-color: var(--purple); background: var(--purple-lt); color: var(--purple); }
+    .wcag-path-label:has(input:checked) .wcag-path-toggle { background: var(--purple-lt); border-color: var(--purple); }
+    .wcag-path-label:has(input:checked) .wcag-path-toggle::after { transform: translateX(15px); background: var(--purple); }
+    .wcag-order-count { font-size: 11px; color: var(--t4); font-weight: 600; }
+
+    .wcag-order-item {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 8px 14px; border-bottom: 1px solid var(--border2);
+      background: var(--card); transition: background .12s;
+    }
+    .wcag-order-item:last-child { border-bottom: none; }
+    .wcag-order-item:hover { background: var(--hover-bg); }
+    .wcag-order-num {
+      width: 24px; height: 24px; border-radius: 50%;
+      background: var(--purple); color: #fff;
+      font-size: 10px; font-weight: 800; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center; margin-top: 2px;
+    }
+    .wcag-order-body { flex: 1; min-width: 0; }
+    .wcag-order-tag {
+      font-size: 10px; font-weight: 800; padding: 1px 5px; border-radius: 4px;
+      background: var(--blue-lt); color: var(--blue);
+      text-transform: lowercase; letter-spacing: .2px; flex-shrink: 0;
+    }
+    .wcag-order-text { font-size: 12.5px; font-weight: 600; color: var(--t1); word-break: break-word; }
+    .wcag-order-text.empty { color: var(--t4); font-style: italic; font-weight: 400; }
+    .wcag-order-meta { display: flex; gap: 5px; margin-top: 3px; flex-wrap: wrap; }
+    .wcag-order-pill {
+      font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 4px;
+      background: var(--border2); color: var(--t3);
+    }
+    .wcag-order-pill.tabidx { background: var(--orange-lt); color: var(--orange); }
+    .wcag-order-pill.role   { background: var(--green-lt);  color: var(--green); }
   `;
   document.head.appendChild(s);
 })();
@@ -489,6 +576,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupTabs();
   setupOverviewTabs();
   setupFontsTab();
+  setupWcagTab();
   await restoreActiveTab();
   await restoreActiveOvTab();
   document.getElementById('btnReanalyze').addEventListener('click', runAudit);
@@ -929,6 +1017,7 @@ function renderResults(scores, data) {
   renderDetails(data, scores);
   renderOvTech(data.overview);
   renderOverview(data);
+  renderWcagOrder(data.wcag?.tabOrder || []);
 }
 
 function quickWinsHTML(wins) {
@@ -1676,10 +1765,11 @@ function renderOvSchema(OV) {
     }
   });
 
+  const chevronSVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`;
   const blocksHTML = schemas.map((schema, i) => {
     const hasError = !!schema.error;
     const pretty   = _schemaPretty.get(i) || null;
-    return `<div class="ov-schema-block">
+    return `<div class="ov-schema-block collapsed">
       <div class="ov-schema-block-head">
         <div class="ov-schema-block-left">
           <span class="ov-schema-idx">#${i+1}</span>
@@ -1697,6 +1787,7 @@ function renderOvSchema(OV) {
             </svg>
             Export
           </button>` : ''}
+          <span class="ov-schema-chevron">${chevronSVG}</span>
         </div>
       </div>
       ${hasError
@@ -1738,6 +1829,14 @@ function renderOvSchema(OV) {
   if (expAll) expAll.addEventListener('click', () => {
     const valid = schemas.map(s=>s.parsed).filter(Boolean);
     downloadJSON(valid.length===1?valid[0]:valid, 'schema-all.json');
+  });
+
+  // Accordion toggle
+  el.querySelectorAll('.ov-schema-block-head').forEach(head => {
+    head.addEventListener('click', e => {
+      if (e.target.closest('button')) return;
+      head.closest('.ov-schema-block').classList.toggle('collapsed');
+    });
   });
 }
 
@@ -2274,6 +2373,92 @@ function esc(str) {
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  WCAG TAB
+// ══════════════════════════════════════════════════════════════════════════════
+
+function setupWcagTab() {
+  document.querySelectorAll('.wcag-tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tab = btn.dataset.wcagtab;
+      document.querySelectorAll('.wcag-tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.wcag-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById(`wcagpanel-${tab}`).classList.add('active');
+    });
+  });
+}
+
+function renderWcagOrder(tabOrder) {
+  const el = document.getElementById('wcagOrderContent');
+  if (!el) return;
+
+  if (!tabOrder || !tabOrder.length) {
+    el.innerHTML = `<div class="ov-empty" style="padding:32px;">
+      <div class="ov-empty-icon">⌨️</div>
+      <div class="ov-empty-text">No focusable elements found</div>
+      <div class="ov-empty-sub">This page has no keyboard-navigable elements.</div>
+    </div>`;
+    return;
+  }
+
+  el.innerHTML = `
+    <div class="wcag-order-ctrl">
+      <label class="wcag-path-label" title="Overlay tab-order path visually on the page">
+        <input type="checkbox" id="chkTabOrderPath">
+        <span class="wcag-path-toggle"></span>
+        Show tab path on page
+      </label>
+      <span class="wcag-order-count">${tabOrder.length} focusable element${tabOrder.length !== 1 ? 's' : ''}</span>
+    </div>
+    <div id="wcagOrderList">
+      ${tabOrder.map(item => {
+        const typeStr = item.type ? ` [${esc(item.type)}]` : '';
+        const label   = item.text || '';
+        const hasTi   = item.tabindex !== null && item.tabindex !== '0' && item.tabindex !== '-1';
+        return `<div class="wcag-order-item">
+          <div class="wcag-order-num">${item.index}</div>
+          <div class="wcag-order-body">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;flex-wrap:wrap;">
+              <span class="wcag-order-tag">${esc(item.tag)}${esc(typeStr)}</span>
+              <span class="wcag-order-text ${label ? '' : 'empty'}">${label ? esc(label) : 'no accessible label'}</span>
+            </div>
+            ${(item.role || hasTi) ? `<div class="wcag-order-meta">
+              ${item.role ? `<span class="wcag-order-pill role">role="${esc(item.role)}"</span>` : ''}
+              ${hasTi     ? `<span class="wcag-order-pill tabidx">tabindex="${esc(item.tabindex)}"</span>` : ''}
+            </div>` : ''}
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+
+  el.querySelector('#chkTabOrderPath').addEventListener('change', async e => {
+    await storageSet('tabOrderOverlayActive', e.target.checked);
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab?.id) {
+        await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content.js'] });
+        await chrome.tabs.sendMessage(tab.id, { action: 'toggleTabOrderOverlay', enabled: e.target.checked });
+      }
+    } catch (_) {}
+  });
+
+  // Restore persisted state — re-check and re-activate if it was on before popup closed
+  (async () => {
+    const { tabOrderOverlayActive } = await storageGet('tabOrderOverlayActive');
+    const chk = el.querySelector('#chkTabOrderPath');
+    if (!tabOrderOverlayActive || !chk) return;
+    chk.checked = true;
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab?.id) {
+        await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content.js'] });
+        await chrome.tabs.sendMessage(tab.id, { action: 'toggleTabOrderOverlay', enabled: true });
+      }
+    } catch (_) {}
+  })();
+}
 
 // ══════════════════════════════════════════════════════════════════════════════
 //  FONTS INFO TAB
