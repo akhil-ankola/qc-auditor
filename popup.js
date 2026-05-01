@@ -192,6 +192,15 @@ let _schemaPretty = new Map();   // idx → pretty JSON string (avoids large dat
     .badge-anchor   { background: var(--blue-lt);   color: var(--blue); }
     .badge-internal { background: var(--green-lt);  color: var(--green); }
     .badge-external { background: var(--red-lt);    color: var(--red); }
+    .badge-mail     { background: var(--purple-lt); color: var(--purple); }
+    .badge-tel      { background: var(--blue-lt);   color: var(--blue); }
+    .ov-link-type-row { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 2px; }
+    .ltp { font-size: 8.5px; font-weight: 700; padding: 1px 5px; border-radius: 4px; white-space: nowrap; }
+    .ltp-nofollow  { background: var(--red-lt);    color: var(--red); }
+    .ltp-sponsored { background: var(--orange-lt); color: var(--orange); }
+    .ltp-ugc       { background: var(--border2);   color: var(--t3); }
+    .ltp-safe      { background: var(--green-lt);  color: var(--green); }
+    .ltp-blank     { background: var(--blue-lt);   color: var(--blue); }
     .ov-link-href   { font-size: 12px; font-weight: 700; color: var(--t1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
     .ov-link-title  { font-size: 11.5px; color: var(--t3); margin-bottom: 2px; }
     .ov-link-title .ov-link-title-val  { font-weight: 600; color: var(--t2); }
@@ -565,6 +574,21 @@ let _schemaPretty = new Map();   // idx → pretty JSON string (avoids large dat
     }
     .wcag-order-pill.tabidx { background: var(--orange-lt); color: var(--orange); }
     .wcag-order-pill.role   { background: var(--green-lt);  color: var(--green); }
+
+    /* ── WCAG Structure tab ───────────────────────────────────────── */
+    .wcag-struct-tree {
+      padding: 14px 16px; font-family: 'Courier New', Courier, monospace;
+      font-size: 12.5px; line-height: 1.85; overflow-x: auto; background: var(--card);
+    }
+    .wst-line { display: flex; align-items: baseline; }
+    .wst-pre  { color: var(--t4); user-select: none; white-space: pre; flex-shrink: 0; }
+    .wst-tag  { color: var(--blue); font-weight: 700; white-space: nowrap; }
+    .wst-role {
+      font-size: 10px; padding: 1px 5px; border-radius: 4px; margin-left: 6px;
+      background: var(--green-lt); color: var(--green); font-weight: 700;
+      font-family: inherit; white-space: nowrap;
+    }
+    .wst-aria { font-size: 10.5px; color: var(--t3); margin-left: 6px; font-style: italic; white-space: nowrap; }
   `;
   document.head.appendChild(s);
 })();
@@ -1018,6 +1042,7 @@ function renderResults(scores, data) {
   renderOvTech(data.overview);
   renderOverview(data);
   renderWcagOrder(data.wcag?.tabOrder || []);
+  renderWcagStructure(data.wcag?.structure || null);
 }
 
 function quickWinsHTML(wins) {
@@ -1643,9 +1668,25 @@ function renderOvLinks(OV) {
 
   const badge = l => l.isAnchor
     ? `<span class="ov-link-badge badge-anchor">Anchor</span>`
-    : l.isInternal
-      ? `<span class="ov-link-badge badge-internal">Internal</span>`
-      : `<span class="ov-link-badge badge-external">External</span>`;
+    : l.isMail
+      ? `<span class="ov-link-badge badge-mail">Mailto</span>`
+      : l.isTel
+        ? `<span class="ov-link-badge badge-tel">Tel</span>`
+        : l.isInternal
+          ? `<span class="ov-link-badge badge-internal">Internal</span>`
+          : `<span class="ov-link-badge badge-external">External</span>`;
+
+  const typePills = l => {
+    const parts = [];
+    const rels = l.rel ? l.rel.split(/\s+/).filter(Boolean) : [];
+    if (rels.includes('nofollow'))   parts.push(`<span class="ltp ltp-nofollow">nofollow</span>`);
+    if (rels.includes('sponsored'))  parts.push(`<span class="ltp ltp-sponsored">sponsored</span>`);
+    if (rels.includes('ugc'))        parts.push(`<span class="ltp ltp-ugc">ugc</span>`);
+    if (rels.includes('noopener'))   parts.push(`<span class="ltp ltp-safe">noopener</span>`);
+    if (rels.includes('noreferrer')) parts.push(`<span class="ltp ltp-safe">noreferrer</span>`);
+    if (l.target === '_blank')       parts.push(`<span class="ltp ltp-blank">↗ new tab</span>`);
+    return parts.length ? `<div class="ov-link-type-row">${parts.join('')}</div>` : '';
+  };
 
   let _linkIdx = 0;
   _linkItemFn = l => {
@@ -1657,6 +1698,7 @@ function renderOvLinks(OV) {
       ${badge(l)}<span class="ov-link-href" title="${esc(l.href)}">${esc(l.href.length>50?l.href.slice(0,47)+'…':l.href)}</span>
     </div>
     <div class="ov-link-title">Title: ${l.title?`<span class="ov-link-title-val">${esc(l.title)}</span>`:`<span class="ov-link-title-miss">not defined</span>`}</div>
+    ${typePills(l)}
     ${l.count>1?`<div class="ov-link-occ">↩ Found ${l.count-1} more occurrence${l.count>2?'s':''}</div>`:''}
   </div>`;
   };
@@ -2444,20 +2486,53 @@ function renderWcagOrder(tabOrder) {
     } catch (_) {}
   });
 
-  // Restore persisted state — re-check and re-activate if it was on before popup closed
+  // Restore persisted state — only if overlay is still in DOM (page refresh clears it)
   (async () => {
     const { tabOrderOverlayActive } = await storageGet('tabOrderOverlayActive');
     const chk = el.querySelector('#chkTabOrderPath');
     if (!tabOrderOverlayActive || !chk) return;
-    chk.checked = true;
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (tab?.id) {
-        await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content.js'] });
-        await chrome.tabs.sendMessage(tab.id, { action: 'toggleTabOrderOverlay', enabled: true });
+      if (!tab?.id) return;
+      await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content.js'] });
+      const resp = await chrome.tabs.sendMessage(tab.id, { action: 'getTabOrderOverlayState' });
+      if (!resp?.active) {
+        await storageSet('tabOrderOverlayActive', false);
+        return;
       }
-    } catch (_) {}
+      chk.checked = true;
+    } catch (_) {
+      await storageSet('tabOrderOverlayActive', false);
+    }
   })();
+}
+
+function renderWcagStructure(tree) {
+  const el = document.getElementById('wcagStructContent');
+  if (!el) return;
+
+  if (!tree) {
+    el.innerHTML = `<div class="ov-empty" style="padding:32px;">
+      <div class="ov-empty-icon">🏗️</div>
+      <div class="ov-empty-text">No semantic structure found</div>
+      <div class="ov-empty-sub">This page has no semantic HTML landmarks.</div>
+    </div>`;
+    return;
+  }
+
+  function lines(node, lp, cp) {
+    const roleHtml  = node.role  ? ` <span class="wst-role">${esc(node.role)}</span>` : '';
+    const labelHtml = node.label ? ` <span class="wst-aria">${esc('"' + node.label + '"')}</span>` : '';
+    const out = [`<div class="wst-line"><span class="wst-pre">${esc(lp)}</span><span class="wst-tag">&lt;${esc(node.tag)}&gt;</span>${roleHtml}${labelHtml}</div>`];
+    const n = node.children.length;
+    node.children.forEach((c, i) => {
+      const last = i === n - 1;
+      out.push(...lines(c, cp + (last ? '└── ' : '├── '), cp + (last ? '     ' : '│    ')));
+    });
+    return out;
+  }
+
+  el.innerHTML = `<div class="wcag-struct-tree">${lines(tree, '', '').join('')}</div>`;
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

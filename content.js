@@ -345,16 +345,20 @@ if (!window.__qcAuditorLoaded) {
       if (!rawHref) return;
       const title      = (link.getAttribute('title') || '').trim();
       const text       = link.textContent.trim().replace(/\s+/g, ' ').slice(0, 80);
+      const rel        = (link.getAttribute('rel') || '').trim().toLowerCase();
+      const target     = (link.getAttribute('target') || '').trim().toLowerCase();
+      const isMail     = rawHref.startsWith('mailto:');
+      const isTel      = rawHref.startsWith('tel:');
       const isAnchor   = rawHref.startsWith('#');
       const isExternal = rawHref.startsWith('http') && !rawHref.includes(hostname);
-      const isInternal = !isExternal && !isAnchor && !rawHref.startsWith('mailto:') && !rawHref.startsWith('tel:') && !rawHref.startsWith('javascript:');
+      const isInternal = !isExternal && !isAnchor && !isMail && !isTel && !rawHref.startsWith('javascript:');
       const href       = rawHref.slice(0, 200);
       if (linksMap.has(href)) {
         linksMap.get(href).count++;
         if (!linksMap.get(href).title && title) linksMap.get(href).title = title;
         if (!linksMap.get(href).text  && text)  linksMap.get(href).text  = text;
       } else {
-        linksMap.set(href, { href, title, text, isInternal, isExternal, isAnchor, count: 1 });
+        linksMap.set(href, { href, title, text, rel, target, isInternal, isExternal, isAnchor, isMail, isTel, count: 1 });
       }
     });
 
@@ -642,7 +646,49 @@ if (!window.__qcAuditorLoaded) {
         };
       });
     }
-    data.wcag = { tabOrder: collectTabOrder() };
+    // ── WCAG: Semantic Structure Tree ──────────────────────────────────────────
+    function collectSemanticStructure() {
+      const SEMANTIC = new Set([
+        'header', 'nav', 'main', 'aside', 'footer',
+        'section', 'article',
+        'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+        'form', 'figure', 'details', 'dialog', 'address'
+      ]);
+      let count = 0;
+
+      function buildNode(el, depth) {
+        if (count++ > 150 || depth > 8) return null;
+        const tag   = el.tagName.toLowerCase();
+        const label = (el.getAttribute('aria-label') || '').trim().slice(0, 40);
+        const role  = (el.getAttribute('role') || '').trim();
+        const children = [];
+        for (const child of el.children) {
+          if (SEMANTIC.has(child.tagName.toLowerCase())) {
+            const node = buildNode(child, depth + 1);
+            if (node) children.push(node);
+          } else {
+            gatherSemantic(child, depth + 1, children);
+          }
+        }
+        return { tag, label, role, children };
+      }
+
+      function gatherSemantic(el, depth, out) {
+        if (count > 150 || depth > 8) return;
+        for (const child of el.children) {
+          if (SEMANTIC.has(child.tagName.toLowerCase())) {
+            const node = buildNode(child, depth);
+            if (node) out.push(node);
+          } else {
+            gatherSemantic(child, depth + 1, out);
+          }
+        }
+      }
+
+      return document.body ? buildNode(document.body, 0) : null;
+    }
+
+    data.wcag = { tabOrder: collectTabOrder(), structure: collectSemanticStructure() };
 
     return data;
   }
@@ -678,6 +724,9 @@ if (!window.__qcAuditorLoaded) {
         else window.TabOrderOverlay.remove();
         sendResponse({ success: true });
       } catch (err) { sendResponse({ success: false, error: err.message }); }
+    }
+    if (request.action === 'getTabOrderOverlayState') {
+      sendResponse({ active: !!document.getElementById('__pp_tab_overlay__') });
     }
     return true;
   });
@@ -1827,8 +1876,8 @@ window.TabOrderOverlay = (() => {
         const badge = badges[i];
         if (!badge) return;
         badge.style.left    = (cx - 12) + 'px';
-        badge.style.top     = (r.top - 16) + 'px';
-        // fade out badges whose element is off the visible viewport
+        // flip below the element when badge would go above the viewport (e.g. sticky nav)
+        badge.style.top     = (r.top - 16 < 0 ? r.bottom + 2 : r.top - 16) + 'px';
         badge.style.opacity = (r.top > -40 && r.top < vh + 40) ? '1' : '0';
       });
 
